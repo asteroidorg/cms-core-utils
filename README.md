@@ -1,6 +1,12 @@
-# @asteroidcms/core-utils
-
-Seamless integration utilities for [Asteroid CMS](https://cms.theasteroid.tech) — a single React provider, Apollo client, content hooks, media helpers, and a rich-text renderer.
+<div align="center">
+  <h1>
+    <div style="display: inline-flex; align-items: center; gap: 4px;">
+      <img src="https://cms.theasteroid.tech/logo/logo_gradient.svg" alt="@asteroidcms" height="25px" />
+      <span>/core-utils</span>
+    </div>
+  </h1>
+  <p>Seamless integration utilities for <a href="https://cms.theasteroid.tech">Asteroid CMS</a> — a single React provider, Apollo client, content hooks, media helpers, and a rich-text renderer.</p>
+</div>
 
 - **Provider-driven** — configure `cmsUrl`, `apiKey`, and Apollo behavior in one place
 - **API-key auth only** — sends `x-api-key` on every request, nothing else
@@ -13,6 +19,10 @@ Seamless integration utilities for [Asteroid CMS](https://cms.theasteroid.tech) 
 
 ```bash
 npm install @asteroidcms/core-utils @apollo/client graphql react react-dom
+```
+
+```bash
+npm install @apollo/client-integration-nextjs # for nextjs (optional)
 ```
 
 `@apollo/client`, `graphql`, `react`, and `react-dom` are peer dependencies.
