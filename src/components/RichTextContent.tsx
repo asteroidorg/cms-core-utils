@@ -1,6 +1,14 @@
-import { createElement, useEffect, useMemo, useRef } from "react";
+import {
+  createElement,
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 import hljs from "highlight.js/lib/common";
-import "highlight.js/styles/tokyo-night-dark.css";
 import {
   parseRichText,
   type ParseRichTextOptions,
@@ -27,6 +35,31 @@ interface RichTextContentProps {
    * `useTableOfContents` that need a stable reference to the rendered tree.
    */
   contentRef?: React.MutableRefObject<HTMLElement | null>;
+  /**
+   * Per-variant icon override for callouts that opt into icons via
+   * `data-icon`. Provide a React element for any variant key — these
+   * elements are rendered into the chip via a portal, so they live in
+   * React land (refs, event handlers, theme context all work). Variants
+   * you don't provide fall back to the built-in SVG glyph.
+   *
+   * Common variants: `"info" | "warning" | "success" | "danger" | "default"`.
+   * Custom variant names work too — anything you set via
+   * `data-variant` on an `<aside data-callout>`.
+   *
+   * Example:
+   * ```tsx
+   * import { Info, AlertTriangle } from "lucide-react";
+   *
+   * <RichTextContent
+   *   html={article.doc}
+   *   calloutIcons={{
+   *     info: <Info size={14} strokeWidth={2.4} />,
+   *     warning: <AlertTriangle size={14} strokeWidth={2.4} />,
+   *   }}
+   * />
+   * ```
+   */
+  calloutIcons?: Partial<Record<string, ReactNode>>;
 }
 
 /**
@@ -138,6 +171,75 @@ function findQuoteBody(bq: HTMLQuoteElement): {
   while (lastIdx >= 0 && isAttributionEl(children[lastIdx])) lastIdx--;
   if (lastIdx < 0) return { first: null, last: null };
   return { first: children[0], last: children[lastIdx] };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Callout icon injection                                                     */
+/* -------------------------------------------------------------------------- */
+
+// Per-variant SVG glyphs rendered inside the callout chip when the author
+// opts into the icon. Kept as raw strings so they can be inlined cheaply via
+// `innerHTML`. All glyphs share the same 16×16 viewBox so they line up in
+// the chip.
+const CALLOUT_ICON_SVG: Record<string, string> = {
+  info: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5"/><path d="M12 8h.01"/></svg>`,
+  warning: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>`,
+  success: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>`,
+  danger: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>`,
+  default: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 2.5l1.6 5.4a4 4 0 0 0 2.5 2.5L21.5 12l-5.4 1.6a4 4 0 0 0-2.5 2.5L12 21.5l-1.6-5.4a4 4 0 0 0-2.5-2.5L2.5 12l5.4-1.6a4 4 0 0 0 2.5-2.5z"/></svg>`,
+};
+
+function calloutVariantOf(el: Element): string {
+  return el.getAttribute("data-variant") ?? "default";
+}
+
+function isIconEnabled(el: Element): boolean {
+  const v = el.getAttribute("data-icon");
+  // Treat presence-only (`data-icon`) as truthy; explicit "false"/"0" disables.
+  if (v === null) return false;
+  return v !== "false" && v !== "0";
+}
+
+/**
+ * Walk the callouts in the rendered subtree and ensure each one that has
+ * `data-icon` set carries an empty `<span class="rt-callout-icon">` chip at
+ * its first child. The chip's contents are filled later by React (either
+ * a portal of the user-supplied element, or the built-in SVG glyph),
+ * which lets consumers swap in their own icon components.
+ *
+ * Returns the chip spans currently in the DOM in document order so the
+ * component can render portals into them.
+ */
+function enhanceCallouts(
+  root: HTMLElement,
+): Array<{ el: HTMLElement; variant: string }> {
+  const callouts = root.querySelectorAll<HTMLElement>("aside[data-callout]");
+  callouts.forEach((el) => {
+    if (el.dataset.rtCalloutEnhanced === "1") return;
+    el.dataset.rtCalloutEnhanced = "1";
+    if (!isIconEnabled(el)) return;
+    if (el.querySelector(":scope > .rt-callout-icon")) return;
+    const variant = calloutVariantOf(el);
+    const icon = document.createElement("span");
+    icon.className = "rt-callout-icon";
+    icon.dataset.variant = variant;
+    icon.setAttribute("aria-hidden", "true");
+    el.prepend(icon);
+  });
+  const chips: Array<{ el: HTMLElement; variant: string }> = [];
+  root
+    .querySelectorAll<HTMLElement>(
+      "aside[data-callout] > .rt-callout-icon",
+    )
+    .forEach((chip) => {
+      chips.push({
+        el: chip,
+        variant:
+          chip.dataset.variant ||
+          (chip.parentElement?.getAttribute("data-variant") ?? "default"),
+      });
+    });
+  return chips;
 }
 
 function enhanceBlockquotes(root: HTMLElement) {
@@ -441,6 +543,33 @@ function enhanceCodeBlocks(root: HTMLElement) {
   });
 }
 
+// Inlined `tokyo-night-dark` highlight.js theme. Bundled as a string rather
+// than imported as a CSS file so the package works in SSR environments
+// (Node throws "Unknown file extension '.css'" otherwise). Injected once on
+// the client via `ensureCodeBlockStyles`.
+const HLJS_THEME = `
+pre code.hljs { display: block; overflow-x: auto; padding: 1em; }
+code.hljs { padding: 3px 5px; }
+.hljs-meta, .hljs-comment { color: #565f89; }
+.hljs-tag, .hljs-doctag, .hljs-selector-id, .hljs-selector-class,
+.hljs-regexp, .hljs-template-tag, .hljs-selector-pseudo,
+.hljs-selector-attr, .hljs-variable.language_, .hljs-deletion { color: #f7768e; }
+.hljs-variable, .hljs-template-variable, .hljs-number, .hljs-literal,
+.hljs-type, .hljs-params, .hljs-link { color: #ff9e64; }
+.hljs-built_in, .hljs-attribute { color: #e0af68; }
+.hljs-selector-tag { color: #73daca; }
+.hljs-keyword, .hljs-title.function_, .hljs-title, .hljs-title.class_,
+.hljs-title.class_.inherited__, .hljs-subst, .hljs-property { color: #7dcfff; }
+.hljs-quote, .hljs-string, .hljs-symbol, .hljs-bullet,
+.hljs-addition { color: #9ece6a; }
+.hljs-code, .hljs-formula, .hljs-section { color: #7aa2f7; }
+.hljs-name, .hljs-operator, .hljs-char.escape_, .hljs-attr { color: #bb9af7; }
+.hljs-punctuation { color: #c0caf5; }
+.hljs { background: #1a1b26; color: #9aa5ce; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: bold; }
+`;
+
 const CODEBLOCK_STYLE = `
 .rt-codeblock { position: relative; }
 .rt-codeblock[data-filename]:not([data-filename=""]) { padding-top: 2rem; }
@@ -492,6 +621,64 @@ const CODEBLOCK_STYLE = `
 }
 .rt-quote-open { margin-right: 0.15em; }
 .rt-quote-close { margin-left: 0.15em; }
+
+/* Callout chip ----------------------------------------------------------- */
+/* Layout: when a callout opts into an icon, use a 2-column grid so the chip
+   sits left of the title + body. Consumers can override via classMap. */
+aside[data-callout][data-icon]:not([data-icon="false"]):not([data-icon="0"]) {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.85rem;
+  align-items: start;
+}
+aside[data-callout][data-icon]:not([data-icon="false"]):not([data-icon="0"]) > .rt-callout-icon {
+  grid-row: 1 / span 99;
+  margin-top: 0.05rem;
+}
+.rt-callout-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 0.4rem;
+  color: #fff;
+  background: #475569;
+  flex-shrink: 0;
+}
+.rt-callout-icon[data-variant="info"]    { background: #2563eb; }
+.rt-callout-icon[data-variant="warning"] { background: #d97706; }
+.rt-callout-icon[data-variant="success"] { background: #16a34a; }
+.rt-callout-icon[data-variant="danger"]  { background: #dc2626; }
+.rt-callout-icon[data-variant="default"] { background: #475569; }
+
+/* Collapsible (FAQ accordion) ------------------------------------------ */
+/* Native <details>/<summary> with a rotating chevron. Only structural
+   styling lives here — colors, padding, and typography belong to
+   consumers via the \`collapsible\` and \`collapsibleTitle\` classMap keys. */
+details[data-collapsible] > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+details[data-collapsible] > summary::-webkit-details-marker { display: none; }
+details[data-collapsible] > summary::after {
+  content: "";
+  width: 0.55rem;
+  height: 0.55rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg) translate(-0.1rem, 0.05rem);
+  transition: transform 0.18s ease;
+  opacity: 0.55;
+  flex-shrink: 0;
+}
+details[data-collapsible][open] > summary::after {
+  transform: rotate(45deg) translate(-0.05rem, -0.05rem);
+}
 /* highlight.js theme handles .hljs-* color classes; we only override the
    default .hljs background so the per-block chrome (dark bg, terminal,
    diff red/green rows) wins. */
@@ -634,9 +821,24 @@ function ensureCodeBlockStyles() {
   }
   const tag = document.createElement("style");
   tag.id = "rt-codeblock-style";
-  tag.textContent = CODEBLOCK_STYLE;
+  tag.textContent = HLJS_THEME + "\n" + CODEBLOCK_STYLE;
   document.head.appendChild(tag);
   styleInjected = true;
+}
+
+type CalloutChip = { el: HTMLElement; variant: string };
+
+function calloutChipsEqual(a: CalloutChip[], b: CalloutChip[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].el !== b[i].el || a[i].variant !== b[i].variant) return false;
+  }
+  return true;
+}
+
+function BuiltinCalloutIcon({ variant }: { variant: string }) {
+  const html = CALLOUT_ICON_SVG[variant] ?? CALLOUT_ICON_SVG.default;
+  return <span dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 export function RichTextContent({
@@ -646,6 +848,7 @@ export function RichTextContent({
   className,
   onReady,
   contentRef,
+  calloutIcons,
 }: RichTextContentProps) {
   const merged = useMemo(
     () => mergeClassMap(DEFAULT_CLASS_MAP, classMap),
@@ -657,6 +860,7 @@ export function RichTextContent({
   );
 
   const ref = useRef<HTMLElement | null>(null);
+  const [chips, setChips] = useState<CalloutChip[]>([]);
 
   useEffect(() => {
     ensureCodeBlockStyles();
@@ -681,6 +885,11 @@ export function RichTextContent({
       mo.disconnect();
       enhanceCodeBlocks(root);
       enhanceBlockquotes(root);
+      const nextChips = enhanceCallouts(root);
+      // Equality short-circuit so re-renders triggered by other DOM
+      // mutations (highlighter writes, copy buttons) don't loop us through
+      // setState → portal write → MO fires → apply → setState…
+      setChips((prev) => (calloutChipsEqual(prev, nextChips) ? prev : nextChips));
       onReady?.(root);
       mo.observe(root, { childList: true, subtree: true });
     };
@@ -713,9 +922,24 @@ export function RichTextContent({
   // ref on each commit. That churn breaks downstream observers
   // (`useTableOfContents`, custom MutationObservers) that expect the node
   // identity to be stable across renders of the same article.
-  return createElement(as, {
-    ref,
-    className,
-    dangerouslySetInnerHTML: { __html: safe },
-  });
+  return (
+    <Fragment>
+      {createElement(as, {
+        ref,
+        className,
+        dangerouslySetInnerHTML: { __html: safe },
+      })}
+      {chips.map((chip, i) =>
+        createPortal(
+          calloutIcons && chip.variant in calloutIcons ? (
+            calloutIcons[chip.variant]
+          ) : (
+            <BuiltinCalloutIcon variant={chip.variant} />
+          ),
+          chip.el,
+          `${chip.variant}:${i}`,
+        ),
+      )}
+    </Fragment>
+  );
 }

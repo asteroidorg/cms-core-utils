@@ -356,18 +356,23 @@ getContentReadTime(article.body, {
 
 ## `<RichTextContent>`
 
-Render Asteroid CMS rich-text HTML with syntax-highlighted code blocks (via `highlight.js`), self-healing enhancements (copy buttons, blockquote decorations), and slugified heading IDs out of the box.
+Render Asteroid CMS rich-text HTML with syntax-highlighted code blocks (via `highlight.js`), self-healing enhancements (copy buttons, blockquote decorations, callout chips), terminal/diff code-block variants, and slugified heading IDs out of the box.
 
 ```tsx
 import { RichTextContent } from "@asteroidcms/core-utils/client";
+import { Info } from "lucide-react";
 
 <RichTextContent
   html={article.body}
   as="article"
   className="prose"
   classMap={{ p: "my-2 leading-relaxed", h2: "text-2xl font-bold" }}
+  onReady={(root) => console.log("hydrated", root.querySelectorAll("h2").length)}
+  calloutIcons={{ info: <Info size={14} strokeWidth={2.4} /> }}
 />;
 ```
+
+Additional props: `contentRef` (forwards the wrapper element, useful for `useTableOfContents`), `onReady` (fires once enhancements have run), and `calloutIcons` (per-variant icon override for `<aside data-callout data-icon>` blocks).
 
 Or use the parser directly (server-safe, no `highlight.js`):
 

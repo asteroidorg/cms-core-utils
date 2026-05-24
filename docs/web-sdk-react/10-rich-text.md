@@ -50,7 +50,8 @@ Defaults are sensible:
 | `as`         | `keyof JSX.IntrinsicElements`                 | `"div"` | The wrapper element. Use `"article"` for blog posts.                                             |
 | `className`  | `string`                                      | —       | Applied to the wrapper.                                                                          |
 | `contentRef` | `MutableRefObject<HTMLElement \| null>`       | —       | Receives the wrapper element. Pair with `useTableOfContents` to build a ToC from the rendered DOM. |
-| `onReady`    | `(root: HTMLElement) => void`                 | —       | Fires after parsed HTML is in the DOM and post-render enhancements (highlighting, copy buttons, blockquote decorations) have run. |
+| `onReady`    | `(root: HTMLElement) => void`                 | —       | Fires after parsed HTML is in the DOM and post-render enhancements (highlighting, copy buttons, blockquote decorations, callout chips) have run. |
+| `calloutIcons` | `Partial<Record<string, ReactNode>>`        | —       | Per-variant icon override for callouts that opt into icons via `data-icon`. See [Callouts](#callouts). Variants you don't provide fall back to the built-in SVG glyph. |
 
 ---
 
@@ -111,7 +112,7 @@ The variant key format is `"<tag>:<variant>"`. The default class map already sty
 
 ## Without highlight.js: `parseRichText`
 
-If you don't want the highlight.js side effect (~50 KB of CSS + the JS), or you're rendering inside a Markdown pipeline, use the parser directly:
+If you don't want to ship the highlight.js runtime (`highlight.js/lib/common` is ~35 grammars plus the inlined `tokyo-night-dark` theme), or you're rendering inside a Markdown pipeline, use the parser directly:
 
 ```tsx
 import { parseRichText, removeEmptyParagraphs } from "@asteroidcms/core-utils";
@@ -301,9 +302,85 @@ For fully-static pages (no highlight.js shipped), use `parseRichText` plus `dang
 
 ## Syntax-highlighted code blocks
 
-`<RichTextContent>` highlights any `<pre><code class="language-xxx">…</code></pre>` block once after mount. The bundled theme is `tokyo-night-dark`. To swap it, override the relevant `.hljs-*` classes in your own stylesheet.
+`<RichTextContent>` highlights any `<pre data-language="xxx"><code>…</code></pre>` block once after mount. The bundled theme is `tokyo-night-dark`, injected as a `<style id="rt-codeblock-style">` tag on first render. To swap it, override the relevant `.hljs-*` classes in your own stylesheet (your rules win — they cascade after the injected `<style>`).
+
+Extra chrome that comes for free on every block:
+
+- **Copy button.** Floats top-right and copies the original source text on click.
+- **Filename label.** Set `<pre data-filename="server.ts">` and the parser renders a small tag in the top-left of the block.
+- **Diff variant.** `<pre data-variant="diff" data-language="ts">` — the inner `<code>` is split on a literal `@@---@@` line into "before" and "after" snippets, then rendered as a side-by-side, syntax-highlighted, line-numbered diff with its own per-side copy buttons.
+- **Terminal variant.** `<pre data-variant="terminal" data-language="sh">` — renders macOS-style traffic lights, a green `$` prompt on every line, and a "Copy commands" button that yields only the commands (no prompts). Defaults to `sh` highlighting when no language is set.
 
 To opt out entirely, render through `parseRichText` instead — that path doesn't import highlight.js.
+
+---
+
+## Callouts
+
+The parser preserves authored `<aside data-callout>` blocks for "info/warning/success/danger" boxes. Two opt-in extras kick in when matching attributes are present on the element:
+
+- **`data-title="Heads up"`** — the renderer inserts a `<p data-callout-title="true">Heads up</p>` as the first child of the aside if one isn't already there. Style it via `classMap.calloutTitle` or `variants["calloutTitle:<variant>"]`.
+- **`data-icon`** — opts the callout into a chip in the leading column. Set to `"false"` or `"0"` to explicitly disable. With the chip enabled, `<RichTextContent>` portals a React element into it so refs, event handlers, and theme context work normally.
+
+Override the chip glyph per variant via `calloutIcons`:
+
+```tsx
+import { Info, AlertTriangle, CheckCircle, XOctagon } from "lucide-react";
+
+<RichTextContent
+  html={post.body}
+  calloutIcons={{
+    info: <Info size={14} strokeWidth={2.4} />,
+    warning: <AlertTriangle size={14} strokeWidth={2.4} />,
+    success: <CheckCircle size={14} strokeWidth={2.4} />,
+    danger: <XOctagon size={14} strokeWidth={2.4} />,
+  }}
+/>;
+```
+
+Built-in glyphs ship for `info`, `warning`, `success`, `danger`, and `default`. Custom variant names work too — anything you put in `data-variant` is the key the renderer looks up in `calloutIcons`.
+
+Style the box itself via the `callout` and `callout:<variant>` keys:
+
+```tsx
+<RichTextContent
+  html={post.body}
+  classMap={{
+    callout: "rounded-lg border px-4 py-3",
+    calloutTitle: "font-semibold mb-1",
+    variants: {
+      "callout:info":    "border-blue-200 bg-blue-50 text-blue-900",
+      "callout:warning": "border-amber-200 bg-amber-50 text-amber-900",
+      "callout:success": "border-emerald-200 bg-emerald-50 text-emerald-900",
+      "callout:danger":  "border-rose-200 bg-rose-50 text-rose-900",
+    },
+  }}
+/>;
+```
+
+---
+
+## Collapsible (FAQ accordion)
+
+Native `<details data-collapsible>` / `<summary>` pairs are preserved by the sanitizer and styled with a rotating chevron out of the box. Layer your own styling via `classMap.collapsible` (the `<details>`) and `classMap.collapsibleTitle` (the `<summary>`):
+
+```tsx
+<RichTextContent
+  html={post.body}
+  classMap={{
+    collapsible:     "rounded-lg border border-slate-200 px-4 py-3 my-3",
+    collapsibleTitle:"font-medium cursor-pointer",
+  }}
+/>;
+```
+
+Only structural styling (chevron, layout) is built in — colors, padding, and typography belong to your `classMap`.
+
+---
+
+## Inline font-size
+
+The sanitizer normally strips inline `style=`. `<span style="font-size: …">` is the one exception: values matching `<number>px|rem|em|%` (1–3 integer digits, optional decimal) pass through verbatim. Anything else is silently dropped. Use this for editor-driven inline sizing without opening up arbitrary CSS.
 
 ---
 

@@ -114,4 +114,4 @@ You imported a hook or the provider from the root `@asteroidcms/core-utils`. Swi
 The SDK ships its own types. If you see this, your `tsconfig.json` likely has `"moduleResolution": "node"` (legacy). Switch to `"bundler"` or `"node16"` so the `exports` map is honored.
 
 **Styles missing for code blocks in rich text**
-`<RichTextContent>` imports `highlight.js/styles/tokyo-night-dark.css` as a side effect. If you tree-shake CSS aggressively, allow CSS from `@asteroidcms/core-utils` in your bundler config — the package marks `**/*.css` as a side effect.
+`<RichTextContent>` ships the `tokyo-night-dark` highlight.js theme as an inline string and injects it into `<head>` on mount — no CSS import is required and nothing needs to be allow-listed in your bundler. If the theme still isn't visible, confirm the component actually mounted (it runs the injection inside `useEffect`, so SSR-only renders won't trigger it; hydration will).

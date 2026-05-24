@@ -47,7 +47,9 @@ export type RichTextClassKey =
   | "img"
   | "span"
   | "callout"
-  | "calloutTitle";
+  | "calloutTitle"
+  | "collapsible"
+  | "collapsibleTitle";
 
 export type RichTextClassMap = Partial<Record<RichTextClassKey, string>> & {
   /** Variant overrides keyed as `${matchKey}:${variant}`, e.g. "callout:warning". */
@@ -113,6 +115,8 @@ const DEFAULT_ALLOWLIST: ReadonlyArray<string> = [
   "article",
   "div",
   "span",
+  "details",
+  "summary",
 ];
 
 /** Per-tag attribute allowlist. Global attrs from GLOBAL_ALLOWED_ATTRS apply to all. */
@@ -125,6 +129,7 @@ const ALLOWED_ATTRS: Record<string, ReadonlyArray<string>> = {
   colgroup: ["span"],
   table: ["border", "cellpadding", "cellspacing"],
   span: ["style"],
+  details: ["open"],
 };
 
 /**
@@ -169,6 +174,7 @@ const GLOBAL_ALLOWED_ATTRS: ReadonlyArray<string> = [
   "data-callout-title",
   "data-language",
   "data-filename",
+  "data-icon",
 ];
 
 const URL_ATTRS = new Set(["href", "src"]);
@@ -805,6 +811,8 @@ function classKeyForTag(
   if (tag === "p" && "data-callout-title" in attrs) return "calloutTitle";
   if (tag === "code" && openStack[openStack.length - 1] !== "pre")
     return "inlineCode";
+  if (tag === "details") return "collapsible";
+  if (tag === "summary") return "collapsibleTitle";
 
   const known: ReadonlyArray<RichTextClassKey> = [
     "p",
