@@ -195,6 +195,53 @@ const { data: topStories } = useCmsContent({
 
 ---
 
+## `fetchCmsContent` (Next.js / RSC)
+
+Server-side counterpart to `useCmsContent`. Use it in Next.js Server Components, route handlers, or any other server-only context. Accepts the same options object as `useCmsContent` and returns the resolved data directly.
+
+```ts
+import { fetchCmsContent } from "@asteroidcms/core-utils";
+
+// Single entry
+const article = await fetchCmsContent<Article>({
+  schema_slug: "news",
+  entrySlug: "police-launch-probe",
+  fullData: true,
+});
+
+// List
+const articles = await fetchCmsContent<Article[]>({
+  schema_slug: "news",
+  limit: 10,
+  status: "PUBLISHED",
+  select: ["title", "slug", "publish_date"],
+});
+```
+
+This module is marked `server-only` and relies on a server-side Apollo client. Importing it from a client component will throw at build time.
+
+---
+
+## `buildCmsQuery`
+
+Lower-level helper that turns a declarative selection into a GraphQL `DocumentNode` plus variables. Used internally by `useCmsContent` and `fetchCmsContent`; exported so you can drive your own Apollo calls (cache reads, prefetching, batching, etc.).
+
+```ts
+import { buildCmsQuery } from "@asteroidcms/core-utils";
+
+const { query, variables, isSingle } = buildCmsQuery({
+  schema_slug: "news",
+  limit: 10,
+  status: "PUBLISHED",
+  select: ["title", "slug"],
+});
+
+const { data } = await apolloClient.query({ query, variables });
+const entries = isSingle ? data.entry : data.entries;
+```
+
+---
+
 ## `useCmsMutate`
 
 `create` / `update` / `delete` against a schema, with the same selection syntax.

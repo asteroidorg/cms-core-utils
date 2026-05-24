@@ -16,6 +16,18 @@ export type { UseCmsContentOptions } from "./hooks/useCmsContent";
 export { useCmsMutate } from "./hooks/useCmsMutate";
 export type { UseCmsMutateOptions } from "./hooks/useCmsMutate";
 
+// Server (Next.js / RSC)
+export { fetchCmsContent } from "./fetchCmsContent";
+
+// Query builder
+export { buildCmsQuery } from "./build-query";
+export type {
+  FieldSelector,
+  ReferenceExpansion,
+  ContentStatus,
+  CmsSearchCondition,
+} from "./build-query";
+
 // Utilities
 export { cmsImage, useCmsImage } from "./utils/cmsImage";
 export { getContentReadTime } from "./utils/getContentReadTime";
