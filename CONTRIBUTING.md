@@ -72,7 +72,7 @@ src/
 ├── provider/               # AsteroidCMSProvider + context + types
 ├── apollo/                 # Apollo client factory + error link
 ├── hooks/                  # useCmsContent, useCmsMutate
-├── utils/                  # cmsImage, useCmsImage
+├── utils/                  # cmsImage, useCmsImage, getContentReadTime
 └── components/             # RichTextContent + richTextParser
 ```
 

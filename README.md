@@ -5,13 +5,13 @@
       <span>/core-utils</span>
     </div>
   </h1>
-  <p>Seamless integration utilities for <a href="https://cms.theasteroid.tech">Asteroid CMS</a> — a single React provider, Apollo client, content hooks, media helpers, and a rich-text renderer.</p>
+  <p>Seamless integration utilities for <a href="https://cms.theasteroid.tech">Asteroid CMS</a> - a single React provider, Apollo client, content hooks, media helpers, and a rich-text renderer.</p>
 </div>
 
-- **Provider-driven** — configure `cmsUrl`, `apiKey`, and Apollo behavior in one place
-- **API-key auth only** — sends `x-api-key` on every request, nothing else
-- **Typed hooks** — `useCmsContent` / `useCmsMutate` build GraphQL on the fly from a declarative selection
-- **Tree-shakeable** — ESM + CJS + types, `@apollo/client`/`react` as peer deps
+- **Provider-driven** - configure `cmsUrl`, `apiKey`, and Apollo behavior in one place
+- **API-key auth only** - sends `x-api-key` on every request, nothing else
+- **Typed hooks** - `useCmsContent` / `useCmsMutate` build GraphQL on the fly from a declarative selection
+- **Tree-shakeable** - ESM + CJS + types, `@apollo/client`/`react` as peer deps
 
 ---
 
@@ -82,15 +82,15 @@ function NewsList() {
 
 | Prop            | Type                           | Required | Default            | Description                                                  |
 | --------------- | ------------------------------ | -------- | ------------------ | ------------------------------------------------------------ |
-| `cmsUrl`        | `string`                       | ✓        | —                  | Base URL of the Asteroid CMS API.                            |
-| `apiKey`        | `string`                       | ✓        | —                  | Sent on every request as the `x-api-key` header.             |
+| `cmsUrl`        | `string`                       | ✓        | -                  | Base URL of the Asteroid CMS API.                            |
+| `apiKey`        | `string`                       | ✓        | -                  | Sent on every request as the `x-api-key` header.             |
 | `graphqlPath`   | `string`                       |          | `/graphql`         | Path appended to `cmsUrl` for the GraphQL endpoint.          |
 | `mediaPath`     | `string`                       |          | `/media/canonical` | Path used by `cmsImage` / `useCmsImage`.                     |
 | `headers`       | `Record<string, string>`       |          | `{}`               | Extra headers merged onto every GraphQL request.             |
-| `onError`       | `(error: unknown) => void`     |          | —                  | Called for each GraphQL / network / protocol error.          |
-| `cacheConfig`   | `InMemoryCacheConfig`          |          | —                  | Forwarded to `new InMemoryCache(...)` — e.g. `typePolicies`. |
-| `apolloOptions` | `Partial<ApolloClientOptions>` |          | —                  | Escape hatch — overrides any field on the Apollo client.     |
-| `client`        | `ApolloClient`                 |          | —                  | Bring your own pre-built client; skips the internal factory. |
+| `onError`       | `(error: unknown) => void`     |          | -                  | Called for each GraphQL / network / protocol error.          |
+| `cacheConfig`   | `InMemoryCacheConfig`          |          | -                  | Forwarded to `new InMemoryCache(...)` - e.g. `typePolicies`. |
+| `apolloOptions` | `Partial<ApolloClientOptions>` |          | -                  | Escape hatch - overrides any field on the Apollo client.     |
+| `client`        | `ApolloClient`                 |          | -                  | Bring your own pre-built client; skips the internal factory. |
 
 Example with everything wired:
 
@@ -244,7 +244,7 @@ removeComment();
 Build a canonical media URL for an asset id.
 
 ```tsx
-// Inside React — preferred
+// Inside React - preferred
 const cmsImage = useCmsImage();
 <img src={cmsImage(article.cover_image)} alt="" />;
 
@@ -252,6 +252,34 @@ const cmsImage = useCmsImage();
 import { cmsImage } from "@asteroidcms/core-utils";
 cmsImage(id, { cmsUrl: "https://cms-api.example.com" });
 ```
+
+---
+
+## `getContentReadTime`
+
+Estimate reading time for a string of content (plain text or HTML). Strips tags, decodes common entities, counts words, and formats the result.
+
+```ts
+import { getContentReadTime } from "@asteroidcms/core-utils";
+
+getContentReadTime(article.body);
+// "3 min read"
+
+getContentReadTime(article.body, {
+  wordsPerMinute: 220,
+  format: "long",
+  round: "round",
+  minMinutes: 1,
+});
+// "3 minutes read"
+```
+
+| Option           | Type                            | Default   | Description                                       |
+| ---------------- | ------------------------------- | --------- | ------------------------------------------------- |
+| `wordsPerMinute` | `number`                        | `200`     | Average reading speed.                            |
+| `format`         | `"short" \| "long"`             | `"short"` | `"3 min read"` vs `"3 minutes read"`.             |
+| `round`          | `"ceil" \| "round" \| "floor"`  | `"ceil"`  | How fractional minutes are rounded.               |
+| `minMinutes`     | `number`                        | `1`       | Floor for the returned value.                     |
 
 ---
 
@@ -282,7 +310,7 @@ const html = parseRichText(article.body, {
 
 ---
 
-## Advanced — bring your own Apollo client
+## Advanced - bring your own Apollo client
 
 ```tsx
 import { ApolloClient, InMemoryCache } from "@apollo/client";
@@ -320,8 +348,8 @@ npm run build      # writes dist/index.js, dist/index.cjs, dist/index.d.ts
 
 ## License
 
-Proprietary — Copyright © Asteroid. All rights reserved.
+Proprietary - Copyright © Asteroid. All rights reserved.
 
 This package is licensed for use only; copying, modifying, or
-redistributing the source — in whole or in part — is not permitted.
+redistributing the source - in whole or in part - is not permitted.
 See [LICENSE](./LICENSE) for the full terms.
