@@ -40,3 +40,15 @@ export type {
   RichTextClassMap,
   ParseRichTextOptions,
 } from "./components/richTextParser";
+
+// Heading extraction (server-safe — useful for SSR ToC, sitemaps, etc.)
+export {
+  slugify,
+  extractHeadingsFromHtml,
+  extractHeadingsFromElement,
+} from "./utils/extractHeadings";
+export type {
+  HeadingLevel,
+  ExtractedHeading,
+  ExtractHeadingsOptions,
+} from "./utils/extractHeadings";

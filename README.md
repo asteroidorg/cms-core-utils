@@ -356,18 +356,20 @@ getContentReadTime(article.body, {
 
 ## `<RichTextContent>`
 
-Render Asteroid CMS rich-text JSON/HTML with syntax-highlighted code blocks (via `highlight.js`).
+Render Asteroid CMS rich-text HTML with syntax-highlighted code blocks (via `highlight.js`), self-healing enhancements (copy buttons, blockquote decorations), and slugified heading IDs out of the box.
 
 ```tsx
-import { RichTextContent } from "@asteroidcms/core-utils";
+import { RichTextContent } from "@asteroidcms/core-utils/client";
 
 <RichTextContent
-  content={article.body}
+  html={article.body}
+  as="article"
+  className="prose"
   classMap={{ p: "my-2 leading-relaxed", h2: "text-2xl font-bold" }}
 />;
 ```
 
-Or use the parser directly:
+Or use the parser directly (server-safe, no `highlight.js`):
 
 ```ts
 import { parseRichText } from "@asteroidcms/core-utils";
@@ -378,6 +380,59 @@ const html = parseRichText(article.body, {
   },
 });
 ```
+
+### Table of contents
+
+Build a live, scroll-tracked ToC from rendered content with `useTableOfContents`. Pair it with `RichTextContent`'s `contentRef` prop:
+
+```tsx
+import { useRef } from "react";
+import {
+  RichTextContent,
+  useTableOfContents,
+} from "@asteroidcms/core-utils/client";
+
+function Article({ slug, html }: { slug: string; html: string }) {
+  const contentRef = useRef<HTMLElement | null>(null);
+  const { items, activeId } = useTableOfContents(contentRef, {
+    levels: [2, 3],
+    contentKey: slug,           // re-collect when content swaps
+    activationOffset: 96,       // px from viewport top
+  });
+
+  return (
+    <div className="flex gap-8">
+      <RichTextContent
+        html={html}
+        as="article"
+        className="prose"
+        contentRef={contentRef}
+      />
+      <nav>
+        {items.map((it) => (
+          <a
+            key={it.id}
+            href={`#${it.id}`}
+            className={it.id === activeId ? "font-semibold" : ""}
+          >
+            {it.text}
+          </a>
+        ))}
+      </nav>
+    </div>
+  );
+}
+```
+
+For a static, server-side outline (RSC layouts, sitemaps, RSS), use `extractHeadingsFromHtml`:
+
+```ts
+import { extractHeadingsFromHtml } from "@asteroidcms/core-utils";
+
+const toc = extractHeadingsFromHtml(article.body, { levels: [2, 3] });
+```
+
+See the [full rich-text docs](./docs/web-sdk-react/10-rich-text.md) for `classMap` variants, parser options, and `useTableOfContents` tuning.
 
 ---
 

@@ -15,6 +15,18 @@ interface RichTextContentProps {
   /** Wrapper element. Defaults to `div`. Use `article` for blog content. */
   as?: keyof React.JSX.IntrinsicElements;
   className?: string;
+  /**
+   * Fires after the parsed HTML is in the DOM and post-render enhancements
+   * (syntax highlighting, copy buttons, blockquote decorations) have run.
+   * The wrapper element is passed back so callers can read headings, attach
+   * a ToC observer, or do other DOM work without re-querying.
+   */
+  onReady?: (root: HTMLElement) => void;
+  /**
+   * Optional ref to the wrapper element. Useful for hooks like
+   * `useTableOfContents` that need a stable reference to the rendered tree.
+   */
+  contentRef?: React.MutableRefObject<HTMLElement | null>;
 }
 
 /**
@@ -632,6 +644,8 @@ export function RichTextContent({
   classMap,
   as = "div",
   className,
+  onReady,
+  contentRef,
 }: RichTextContentProps) {
   const merged = useMemo(
     () => mergeClassMap(DEFAULT_CLASS_MAP, classMap),
@@ -646,15 +660,59 @@ export function RichTextContent({
 
   useEffect(() => {
     ensureCodeBlockStyles();
-    if (ref.current) {
-      enhanceCodeBlocks(ref.current);
-      enhanceBlockquotes(ref.current);
-    }
-  }, [safe]);
+    const root = ref.current;
+    if (!root) return;
+    if (contentRef) contentRef.current = root;
+
+    // `dangerouslySetInnerHTML` rebuilds the subtree whenever the parsed HTML
+    // changes — and on a parent re-render that produces a new `html` string
+    // reference even with identical content (common with Apollo's
+    // `cache-and-network` returning a fresh object after a background
+    // refetch). The freshly-mounted `<pre>` / `<blockquote>` nodes carry no
+    // `data-rt-*` markers, so re-enhancing is just a matter of re-running
+    // the helpers. A `MutationObserver` makes that automatic: any subtree
+    // mutation triggers a re-application, so syntax highlighting and copy
+    // buttons survive every kind of re-render without the consumer having
+    // to think about effect deps or stable prop identity.
+    const apply = () => {
+      // The enhancers themselves mutate the subtree (inject copy buttons,
+      // rewrite `<code>` innerHTML for hljs). Disconnect while running so
+      // the observer doesn't loop on its own writes.
+      mo.disconnect();
+      enhanceCodeBlocks(root);
+      enhanceBlockquotes(root);
+      onReady?.(root);
+      mo.observe(root, { childList: true, subtree: true });
+    };
+
+    let raf = 0;
+    const mo = new MutationObserver(() => {
+      // Coalesce bursts of mutations from a single React commit into one
+      // enhancement pass.
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        apply();
+      });
+    });
+
+    apply();
+
+    return () => {
+      mo.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [safe, onReady, contentRef]);
 
   // `createElement` avoids the JSX type explosion that happens when a dynamic
   // `<Tag />` widens to the union of every IntrinsicElement
   // (TS2590: Expression produces a union type that is too complex to represent).
+  //
+  // Pass the stable object ref directly — using an inline callback ref here
+  // would be recreated on every render, causing React to null-then-reset the
+  // ref on each commit. That churn breaks downstream observers
+  // (`useTableOfContents`, custom MutationObservers) that expect the node
+  // identity to be stable across renders of the same article.
   return createElement(as, {
     ref,
     className,

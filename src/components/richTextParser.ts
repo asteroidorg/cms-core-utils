@@ -58,6 +58,12 @@ export interface ParseRichTextOptions {
   classMap?: RichTextClassMap;
   /** Tag allowlist override. Defaults to a safe semantic set. */
   allowlist?: ReadonlyArray<string>;
+  /**
+   * When `true` (default), inject slugified `id` attributes on `<h1>`–`<h6>`
+   * tags that don't already have one. Lets ToC anchors resolve from the
+   * server-rendered markup without a client-side mutation step.
+   */
+  autoHeadingIds?: boolean;
 }
 
 const DEFAULT_ALLOWLIST: ReadonlyArray<string> = [
@@ -182,7 +188,60 @@ export function parseRichText(
   working = upgradeStandaloneImages(working);
   working = upgradeAuthoredBlockquotes(working);
   working = flattenTableCellParagraphs(working);
-  return sanitizeAndStyle(working, options);
+  working = sanitizeAndStyle(working, options);
+  if (options.autoHeadingIds !== false) {
+    working = injectHeadingIds(working);
+  }
+  return working;
+}
+
+/**
+ * Add a slugified `id` to each `<h1>`–`<h6>` that doesn't already have one.
+ * Pure string transform; safe to run as a post-pass after sanitization.
+ */
+function injectHeadingIds(html: string): string {
+  const used = new Map<string, number>();
+  // First, reserve existing IDs so generated slugs don't collide with them.
+  const existingRe = /<h[1-6]\b[^>]*\bid\s*=\s*("([^"]*)"|'([^']*)'|(\S+))/gi;
+  let em: RegExpExecArray | null;
+  while ((em = existingRe.exec(html)) !== null) {
+    const id = em[2] ?? em[3] ?? em[4] ?? "";
+    if (id) used.set(id, (used.get(id) ?? 0) + 1);
+  }
+  return html.replace(
+    /<(h[1-6])\b([^>]*)>([\s\S]*?)<\/\1>/gi,
+    (full, tag: string, attrs: string, inner: string) => {
+      if (/\bid\s*=/i.test(attrs)) return full;
+      const text = inner
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!text) return full;
+      const base = slugifyHeading(text) || tag;
+      const n = used.get(base) ?? 0;
+      used.set(base, n + 1);
+      const id = n === 0 ? base : `${base}-${n}`;
+      return `<${tag}${attrs} id="${id}">${inner}</${tag}>`;
+    },
+  );
+}
+
+function slugifyHeading(text: string): string {
+  return text
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 /**

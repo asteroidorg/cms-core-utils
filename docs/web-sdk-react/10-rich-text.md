@@ -11,10 +11,12 @@ CMS rich-text fields are stored as HTML. Rendering them safely takes two pieces:
 - **`parseRichText`** — turns the stored HTML into a sanitized HTML string, applying classes from a `classMap`. Pure function, server-safe.
 - **`<RichTextContent>`** — a React component that wraps `parseRichText` and lazily runs syntax highlighting on the client.
 
-| Use this              | Where                                                          | Import from                       |
-| --------------------- | -------------------------------------------------------------- | --------------------------------- |
-| `<RichTextContent>`   | React trees, including Server Components (it self-marks).      | `@asteroidcms/core-utils/client`  |
-| `parseRichText`       | Anywhere — Server Components, scripts, Markdown pipelines.     | `@asteroidcms/core-utils`         |
+| Use this                     | Where                                                          | Import from                       |
+| ---------------------------- | -------------------------------------------------------------- | --------------------------------- |
+| `<RichTextContent>`          | React trees, including Server Components (it self-marks).      | `@asteroidcms/core-utils/client`  |
+| `parseRichText`              | Anywhere — Server Components, scripts, Markdown pipelines.     | `@asteroidcms/core-utils`         |
+| `useTableOfContents`         | Build a live, scroll-tracked ToC from rendered content.        | `@asteroidcms/core-utils/client`  |
+| `extractHeadingsFromHtml`    | Build a static ToC server-side (RSC, sitemaps, RSS).           | `@asteroidcms/core-utils`         |
 
 ---
 
@@ -33,18 +35,22 @@ Defaults are sensible:
 - A safe allowlist of semantic tags (`p`, `h1`–`h6`, `a`, `ul`/`ol`/`li`, `blockquote`, `pre`, `code`, `kbd`, `table`, `figure`, `img`, `span`, …).
 - `<script>` tags, inline event handlers (`onclick=…`), and `javascript:` URLs are stripped.
 - Code blocks (`<pre><code class="language-…">`) are highlighted with `highlight.js` after mount — no hydration flicker.
+- Enhancements (highlighting, copy buttons, blockquote decorations) are **self-healing**: an internal `MutationObserver` re-applies them whenever the subtree is replaced, so they survive Apollo cache-and-network refetches and other parent re-renders that hand `<RichTextContent>` a new `html` string reference.
+- Headings (`<h1>`–`<h6>`) get slugified `id` attributes automatically, so anchor links and tables of contents work without extra setup. See [Heading IDs](#heading-ids-auto-slugged).
 - Pullquote `<figure>` elements (a blockquote followed by an `— Author` attribution) get default classes so they look right out of the box.
 
 ---
 
 ## Props
 
-| Prop        | Type                                  | Default | Notes                                                          |
-| ----------- | ------------------------------------- | ------- | -------------------------------------------------------------- |
-| `html`      | `string` (required)                   | —       | The raw HTML stored in the CMS field.                          |
-| `classMap`  | `RichTextClassMap`                    | `{}`    | Per-tag and per-variant class overrides. Merges over defaults. |
-| `as`        | `keyof JSX.IntrinsicElements`         | `"div"` | The wrapper element. Use `"article"` for blog posts.           |
-| `className` | `string`                              | —       | Applied to the wrapper.                                        |
+| Prop         | Type                                          | Default | Notes                                                                                            |
+| ------------ | --------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `html`       | `string` (required)                           | —       | The raw HTML stored in the CMS field.                                                            |
+| `classMap`   | `RichTextClassMap`                            | `{}`    | Per-tag and per-variant class overrides. Merges over defaults.                                   |
+| `as`         | `keyof JSX.IntrinsicElements`                 | `"div"` | The wrapper element. Use `"article"` for blog posts.                                             |
+| `className`  | `string`                                      | —       | Applied to the wrapper.                                                                          |
+| `contentRef` | `MutableRefObject<HTMLElement \| null>`       | —       | Receives the wrapper element. Pair with `useTableOfContents` to build a ToC from the rendered DOM. |
+| `onReady`    | `(root: HTMLElement) => void`                 | —       | Fires after parsed HTML is in the DOM and post-render enhancements (highlighting, copy buttons, blockquote decorations) have run. |
 
 ---
 
@@ -141,6 +147,128 @@ return <article dangerouslySetInnerHTML={{ __html: safe }} />;
 ```
 
 Adding `"iframe"` skips the default protections — sanitize iframe `src` attributes yourself before storing them.
+
+---
+
+## Heading IDs (auto-slugged)
+
+Every `<h1>`–`<h6>` returned by `parseRichText` (and therefore `<RichTextContent>`) gets a slugified `id` attribute automatically — so anchor links like `#getting-started` work out of the box, without a client-side mutation step.
+
+- Existing `id` attributes are preserved verbatim.
+- Generated slugs are de-duplicated within a document (`intro`, `intro-1`, `intro-2`, …).
+- Since IDs are part of the parsed string, they're stable across SSR / client hydration.
+
+Turn it off by passing `autoHeadingIds: false` to `parseRichText`:
+
+```ts
+import { parseRichText } from "@asteroidcms/core-utils";
+const html = parseRichText(post.body, { autoHeadingIds: false });
+```
+
+---
+
+## Table of contents
+
+For doc pages, blog posts, or any long-form content, `useTableOfContents` reads headings out of a rendered subtree and tracks which one is currently in view (via `IntersectionObserver`). Pair it with `RichTextContent`'s `contentRef` prop:
+
+```tsx
+"use client";
+
+import { useRef } from "react";
+import {
+  RichTextContent,
+  useTableOfContents,
+} from "@asteroidcms/core-utils/client";
+
+export function ArticleWithToc({
+  slug,
+  html,
+}: {
+  slug: string;
+  html: string;
+}) {
+  const contentRef = useRef<HTMLElement | null>(null);
+  const { items, activeId } = useTableOfContents(contentRef, {
+    levels: [2, 3],
+    contentKey: slug,        // re-collect when the article swaps
+    scrollMarginTop: 80,     // anchor-jump offset for sticky header
+    activationOffset: 96,    // where the "active" line sits (px from top)
+  });
+
+  return (
+    <div className="flex gap-8">
+      <RichTextContent
+        key={slug}
+        html={html}
+        as="article"
+        className="prose flex-1"
+        contentRef={contentRef}
+      />
+      <nav className="sticky top-24 w-64 shrink-0">
+        <p className="mb-3 text-xs uppercase tracking-wider text-slate-500">
+          On this page
+        </p>
+        <ol className="space-y-1">
+          {items.map((it) => (
+            <li
+              key={it.id}
+              style={{ marginLeft: it.level === 3 ? 12 : 0 }}
+            >
+              <a
+                href={`#${it.id}`}
+                className={
+                  it.id === activeId
+                    ? "text-blue-600 font-medium"
+                    : "text-slate-600"
+                }
+              >
+                {it.text}
+              </a>
+            </li>
+          ))}
+        </ol>
+      </nav>
+    </div>
+  );
+}
+```
+
+### `useTableOfContents` options
+
+| Option             | Type                                          | Default  | Notes                                                                                                                                  |
+| ------------------ | --------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `levels`           | `ReadonlyArray<1 \| 2 \| 3 \| 4 \| 5 \| 6>`   | `[2, 3]` | Which heading levels to include.                                                                                                       |
+| `contentKey`       | `string \| number \| null`                    | `null`   | Pass a stable per-article identifier (e.g. slug). Forces re-collection — and re-observation of the new DOM — when content swaps.       |
+| `scrollMarginTop`  | `number`                                      | `24`     | Pixels of `scroll-margin-top` applied to each heading, so anchor jumps land below a sticky header.                                     |
+| `activationOffset` | `number`                                      | `96`     | Distance from viewport top (in px) at which a heading becomes "active". Bump it up to match the height of your sticky header.          |
+
+### Returned shape
+
+| Field      | Type                                                  | Notes                                                              |
+| ---------- | ----------------------------------------------------- | ------------------------------------------------------------------ |
+| `items`    | `Array<{ id; text; level }>`                          | Headings in document order. `level` is `1`–`6`.                    |
+| `activeId` | `string`                                              | ID of the heading currently scrolled past the activation line.     |
+
+### How active tracking works
+
+The active heading is picked **geometrically**, not from `IntersectionObserver` ratios: it's the last heading whose top edge has crossed the activation line (`activationOffset` px from the viewport top). That makes the result monotonic with scroll position — no flicker between competing headings, and no "snap back to a previous heading when nothing's intersecting."
+
+`IntersectionObserver` is still used internally, but only as a cheap wake-up trigger that schedules a re-compute via `requestAnimationFrame`. A `MutationObserver` on the ref'd subtree handles async DOM mutations (the syntax-highlighting pass, lazy embeds, etc.) so the ToC stays in sync without manual invalidation.
+
+**End-of-page rescue.** A heading sitting close to the bottom of an article — or a tightly-spaced `<h2>`/`<h3>` pair — can't always scroll far enough to cross the activation line. When the page is scrolled to its bottom, the hook walks backwards through the headings and activates the last one still inside the viewport, so the final heading always becomes reachable.
+
+### Server-rendering a ToC
+
+If you want the outline available before hydration (sitemaps, RSC layouts), use `extractHeadingsFromHtml` directly. It's a pure string function with no React or DOM dependency:
+
+```ts
+import { extractHeadingsFromHtml } from "@asteroidcms/core-utils";
+
+const toc = extractHeadingsFromHtml(post.body, { levels: [2, 3] });
+// → [{ id: "intro", text: "Intro", level: 2 }, ...]
+```
+
+A DOM-side companion, `extractHeadingsFromElement`, mirrors the same signature but walks a live element — useful when you need to apply IDs to a tree that wasn't produced by `parseRichText` (e.g. content rendered by a third-party Markdown component).
 
 ---
 
