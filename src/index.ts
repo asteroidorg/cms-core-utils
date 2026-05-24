@@ -1,39 +1,36 @@
-// Provider
-export { AsteroidCMSProvider } from "./provider/AsteroidCMSProvider";
-export type { AsteroidCMSProviderProps } from "./provider/AsteroidCMSProvider";
-export { useAsteroidCMSConfig } from "./provider/context";
+// Server-safe entry. No React hooks, no `"use client"` — safe to import
+// from Next.js Server Components, Route Handlers, scripts, and SSR loaders.
+//
+// React/UI exports (provider, hooks, RichTextContent) live in the
+// `@asteroidcms/core-utils/client` subpath.
+
+// Types from the provider config (consumed by createApolloClient)
 export type {
   AsteroidCMSConfig,
   ResolvedAsteroidCMSConfig,
 } from "./provider/types";
 
-// Apollo (escape hatch — most consumers won't need these directly)
+// Apollo factory — pure function, safe on the server
 export { createApolloClient } from "./apollo/createApolloClient";
 
-// Hooks
-export { useCmsContent } from "./hooks/useCmsContent";
-export type { UseCmsContentOptions } from "./hooks/useCmsContent";
-export { useCmsMutate } from "./hooks/useCmsMutate";
-export type { UseCmsMutateOptions } from "./hooks/useCmsMutate";
-
-// Server (Next.js / RSC)
+// Server-side query helper for Next.js / RSC
 export { fetchCmsContent } from "./fetchCmsContent";
 
-// Query builder
+// GraphQL query builder
 export { buildCmsQuery } from "./build-query";
 export type {
   FieldSelector,
   ReferenceExpansion,
   ContentStatus,
   CmsSearchCondition,
+  UseCmsContentOptions,
 } from "./build-query";
 
-// Utilities
-export { cmsImage, useCmsImage } from "./utils/cmsImage";
+// Plain utilities
+export { cmsImage } from "./utils/cmsImage";
 export { getContentReadTime } from "./utils/getContentReadTime";
 
-// Rich text
-export { RichTextContent } from "./components/RichTextContent";
+// Rich text parser (no React)
 export {
   parseRichText,
   removeEmptyParagraphs,
