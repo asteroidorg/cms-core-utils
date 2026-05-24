@@ -197,20 +197,42 @@ const { data: topStories } = useCmsContent({
 
 ## `fetchCmsContent` (Next.js / RSC)
 
-Server-side counterpart to `useCmsContent`. Use it in Next.js Server Components, route handlers, or any other server-only context. Accepts the same options object as `useCmsContent` and returns the resolved data directly.
+Server-side counterpart to `useCmsContent`. Use it in Next.js Server Components, route handlers, or any other server context. Accepts a server-side Apollo client plus the same options object as `useCmsContent`, and returns the resolved data directly.
+
+Pass a `getClient` function that returns a server-side Apollo client. The shape matches what `registerApolloClient` from `@apollo/client-integration-nextjs` already returns, so you can hand it through directly.
 
 ```ts
+// app/lib/cms-server.ts
+import "server-only";
+import { ApolloClient, HttpLink, InMemoryCache } from "@apollo/client";
+import { registerApolloClient } from "@apollo/client-integration-nextjs";
+
+export const { getClient, query, PreloadQuery } = registerApolloClient(() => {
+  return new ApolloClient({
+    cache: new InMemoryCache(),
+    link: new HttpLink({
+      uri: `${process.env.CMS_API_BASE_URL}/graphql`,
+      headers: { "X-API-Key": process.env.CMS_X_API_KEY ?? "" },
+      fetchOptions: { next: { revalidate: 60, tags: ["cms:landing_page"] } },
+    }),
+  });
+});
+```
+
+```ts
+// app/news/[slug]/page.tsx
 import { fetchCmsContent } from "@asteroidcms/core-utils";
+import { getClient } from "@/app/lib/cms-server";
 
 // Single entry
-const article = await fetchCmsContent<Article>({
+const article = await fetchCmsContent<Article>(getClient, {
   schema_slug: "news",
-  entrySlug: "police-launch-probe",
+  entrySlug: params.slug,
   fullData: true,
 });
 
 // List
-const articles = await fetchCmsContent<Article[]>({
+const articles = await fetchCmsContent<Article[]>(getClient, {
   schema_slug: "news",
   limit: 10,
   status: "PUBLISHED",
@@ -218,7 +240,9 @@ const articles = await fetchCmsContent<Article[]>({
 });
 ```
 
-This module is marked `server-only` and relies on a server-side Apollo client. Importing it from a client component will throw at build time.
+Outside Next.js you can pass any `() => ApolloClient` - e.g. `() => createApolloClient({ cmsUrl, apiKey })`.
+
+Add `import "server-only"` in the file that calls it if you want Next.js to fail the build when it leaks into a client component.
 
 ---
 
