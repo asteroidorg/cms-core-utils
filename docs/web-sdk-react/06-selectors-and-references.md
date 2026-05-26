@@ -1,20 +1,22 @@
 ---
 title: Selectors and references
-description: Pick fields, alias them, and pull related entries inline with the SDK's declarative select syntax — shared by useCmsContent, fetchCmsContent, and useCmsMutate.
+description: Pick fields, alias them, and expand related entries with the SDK's declarative select syntax — shared by all read and write APIs.
 order: 6
 ---
 
 # Selectors and references
 
-`select` is how you tell the SDK which fields to pull off an entry, and how deeply to expand related entries. The same syntax works in `useCmsContent`, `fetchCmsContent`, `useCmsMutate`, and `buildCmsQuery`.
+`select` is how you tell the SDK which fields to pull off an entry and how deeply to expand related entries. The same syntax works in `useCmsContent`, `fetchCmsContent`, `useCmsMutate`, `cmsMutate`, `buildCmsQuery`, and `buildCmsMutation`.
 
 A selector is one of:
 
-- **String** — a plain field slug. Returned under the same key.
-- **Aliased field** — `{ field, as }` to rename it on the result.
-- **Reference expansion** — `{ field, select, single?, as? }` to pull related entries.
+| Type | Example | What it does |
+| --- | --- | --- |
+| **String** | `"title"` | Plain field slug. Returned under the same key. |
+| **Aliased field** | `{ field: "title", as: "heading" }` | Renames the field on the result. |
+| **Reference expansion** | `{ field: "author", single: true, select: [...] }` | Pulls related entries inline. |
 
-These compose recursively.
+These compose recursively — expansions can contain expansions.
 
 ---
 
@@ -25,10 +27,10 @@ useCmsContent({
   schema_slug: "blog-posts",
   select: ["title", "slug", "publishedAt"],
 });
-// → { title, slug, publishedAt }
+// Result: { title, slug, publishedAt }
 ```
 
-The key in the result equals the field slug. Misspell a slug and you get `null`, not an error — the CMS doesn't know the difference.
+The key in the result equals the field slug. Misspell a slug and you get `null`, not an error — the CMS doesn't validate field names at query time.
 
 ---
 
@@ -42,7 +44,7 @@ useCmsContent({
     { field: "publishedAt", as: "date" },
   ],
 });
-// → { heading, date }
+// Result: { heading, date }
 ```
 
 Use aliases to:
@@ -53,7 +55,9 @@ Use aliases to:
 
 ---
 
-## Reference expansion: 1:1 (object)
+## Reference expansion
+
+### 1:1 (object)
 
 A blog post that references a single author:
 
@@ -65,21 +69,18 @@ useCmsContent({
     "title",
     {
       field: "author",
-      single: true,             // ← marks it as 1:1
+      single: true,             // marks it as 1:1
       as: "writtenBy",
       select: ["name", "bio", "twitter"],
     },
   ],
 });
+// Result: { title, writtenBy: { name, bio, twitter } | null }
 ```
 
-`data.writtenBy` is an object (or `null`).
+`single: true` means the result is an object (or `null`). Internally this emits `expandedReferenceObject(slug: "author") { ... }`.
 
-Internally this emits `expandedReferenceObject(slug: "author") { ... }`.
-
----
-
-## Reference expansion: 1:N (array)
+### 1:N (array)
 
 A blog post tagged with multiple categories:
 
@@ -95,11 +96,10 @@ useCmsContent({
     },
   ],
 });
+// Result: { title, tags: [{ name, slug }, ...] }
 ```
 
-`data.tags` is `{ name, slug }[]`.
-
-Internally this emits `expandedReference(slug: "tags") { ... }`.
+Omitting `single` (or setting it to `false`) returns an array. Internally this emits `expandedReference(slug: "tags") { ... }`.
 
 ---
 
@@ -127,15 +127,16 @@ useCmsContent({
     },
   ],
 });
+// Result: { title, author: { name, team: { name, slug } } }
 ```
 
-A 5-level deep expansion is rarely the right call — see [Performance tips »](./11-advanced.md#performance-tips).
+> **Performance note:** Each expansion level adds resolver cost on the server. A 5-level deep expansion is rarely worth it — consider a denormalized field instead.
 
 ---
 
 ## `fullData`: skip the selection map
 
-Want the raw JSON document for the entry (useful for admin views, debugging, or one-off scripts)? Set `fullData: true`. The result includes a `data` key alongside any selectors you provided.
+Want the raw JSON document for the entry? Set `fullData: true`:
 
 ```tsx
 const { data } = useCmsContent<{ data: Record<string, unknown> }>({
@@ -149,22 +150,33 @@ console.log(data?.data);
 
 Selectors and `fullData` can be combined — selectors are aliased onto the result, `data` contains everything.
 
-> Prefer specific selectors over `fullData` for production reads. Each `dataField` call is cheaper for the server than serializing the whole document, and you ship less JSON over the wire.
+> Prefer specific selectors over `fullData` for production reads. Each `dataField` call is cheaper for the server than serializing the whole document.
+
+---
+
+## Comparison: `select` vs. `fullData`
+
+| | `select` | `fullData` |
+| --- | --- | --- |
+| **Payload size** | Only requested fields | Entire document |
+| **Type safety** | Fields match your type | `Record<string, unknown>` |
+| **Performance** | Faster — fewer fields resolved | Slower — full serialization |
+| **Best for** | Production reads | Admin views, debugging, scripts |
 
 ---
 
 ## TypeScript: typing reference expansions
 
-A clean way to keep your row type in sync with the selector tree:
+Keep your row type in sync with the selector tree:
 
 ```ts
 type Author = { name: string; bio?: string };
-type Tag    = { name: string; slug: string };
+type Tag = { name: string; slug: string };
 
 type Post = {
   title: string;
   writtenBy: Author | null;     // single: true
-  tags: Tag[];                  // single: false (array)
+  tags: Tag[];                  // no single → array
 };
 
 useCmsContent<Post>({
@@ -173,12 +185,12 @@ useCmsContent<Post>({
   select: [
     "title",
     { field: "author", as: "writtenBy", single: true, select: ["name", "bio"] },
-    { field: "tags",   select: ["name", "slug"] },
+    { field: "tags", select: ["name", "slug"] },
   ],
 });
 ```
 
-The SDK doesn't enforce that the selectors match the type — that's still on you. Treat the type as documentation of what the server should return.
+The SDK doesn't enforce that selectors match the type — treat the type as documentation of what the server should return.
 
 ---
 
@@ -200,9 +212,27 @@ export const POST_LIST_SELECT: NonNullable<UseCmsContentOptions["select"]> = [
 Then drop them into multiple hooks/fetches:
 
 ```tsx
+// Client-side
 useCmsContent<Post[]>({ schema_slug: "blog-posts", select: POST_LIST_SELECT });
+
+// Server-side
+await fetchCmsContent<Post[]>(getClient, {
+  schema_slug: "blog-posts",
+  select: POST_LIST_SELECT,
+});
 ```
 
 Centralizing selectors keeps the wire payload identical between server-rendered pages and client-side rehydrations.
 
-Continue to **[Filtering and search »](./07-filtering-and-search.md)**.
+---
+
+## FAQ
+
+**What happens if I misspell a field name in `select`?**
+You get `null` for that field. The CMS doesn't validate field names at query time, so there's no build error — just a silent `null`.
+
+**Can I use `select` with `useCmsMutate` and `cmsMutate`?**
+Yes. The same selector syntax works for mutation return values. After the mutation succeeds, the selected fields are populated from the saved entry.
+
+**Is there a depth limit for nested expansions?**
+The SDK has no limit, but the server may impose one. In practice, 2–3 levels is the sweet spot.

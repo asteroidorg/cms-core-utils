@@ -16,8 +16,15 @@ export { createApolloClient } from "./apollo/createApolloClient";
 // Server-side query helper for Next.js / RSC
 export { fetchCmsContent } from "./fetchCmsContent";
 
+// Server-side mutation helper for Next.js / RSC
+export { cmsMutate } from "./cmsMutate";
+
 // GraphQL query builder
 export { buildCmsQuery } from "./build-query";
+
+// GraphQL mutation builder
+export { buildCmsMutation } from "./build-mutation";
+export type { CmsMutateOptions, MutationType } from "./build-mutation";
 export type {
   FieldSelector,
   ReferenceExpansion,

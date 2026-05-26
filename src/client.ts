@@ -17,13 +17,6 @@ export { useCmsImage } from "./utils/cmsImage";
 // Rich text component
 export { RichTextContent } from "./components/RichTextContent";
 
-// Table-of-contents hook (uses IntersectionObserver under the hood)
-export { useTableOfContents } from "./hooks/useTableOfContents";
-export type {
-  UseTableOfContentsOptions,
-  UseTableOfContentsResult,
-} from "./hooks/useTableOfContents";
-
 // Re-export heading helpers from the client entry for convenience.
 export {
   slugify,

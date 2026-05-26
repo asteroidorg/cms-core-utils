@@ -11,6 +11,7 @@
 - **Provider-driven** - configure `cmsUrl`, `apiKey`, and Apollo behavior in one place
 - **API-key auth only** - sends `x-api-key` on every request, nothing else
 - **Typed hooks** - `useCmsContent` / `useCmsMutate` build GraphQL on the fly from a declarative selection
+- **Server helpers** - `fetchCmsContent` / `cmsMutate` for Next.js Server Components, Route Handlers, and scripts
 - **Tree-shakeable** - ESM + CJS + types, `@apollo/client`/`react` as peer deps
 
 ---
@@ -34,7 +35,7 @@ npm install @apollo/client-integration-nextjs # for nextjs (optional)
 Wrap your app once:
 
 ```tsx
-import { AsteroidCMSProvider } from "@asteroidcms/core-utils";
+import { AsteroidCMSProvider } from "@asteroidcms/core-utils/client";
 
 export function Root() {
   return (
@@ -51,7 +52,7 @@ export function Root() {
 Then use the hooks anywhere:
 
 ```tsx
-import { useCmsContent, useCmsImage } from "@asteroidcms/core-utils";
+import { useCmsContent, useCmsImage } from "@asteroidcms/core-utils/client";
 
 function NewsList() {
   const cmsImage = useCmsImage();
@@ -197,9 +198,7 @@ const { data: topStories } = useCmsContent({
 
 ## `fetchCmsContent` (Next.js / RSC)
 
-Server-side counterpart to `useCmsContent`. Use it in Next.js Server Components, route handlers, or any other server context. Accepts a server-side Apollo client plus the same options object as `useCmsContent`, and returns the resolved data directly.
-
-Pass a `getClient` function that returns a server-side Apollo client. The shape matches what `registerApolloClient` from `@apollo/client-integration-nextjs` already returns, so you can hand it through directly.
+Server-side counterpart to `useCmsContent`. Use it in Next.js Server Components, Route Handlers, or any other server context. Accepts a `getClient` function plus the same options object as `useCmsContent`, and returns the resolved data directly.
 
 ```ts
 // app/lib/cms-server.ts
@@ -241,28 +240,6 @@ const articles = await fetchCmsContent<Article[]>(getClient, {
 ```
 
 Outside Next.js you can pass any `() => ApolloClient` - e.g. `() => createApolloClient({ cmsUrl, apiKey })`.
-
-Add `import "server-only"` in the file that calls it if you want Next.js to fail the build when it leaks into a client component.
-
----
-
-## `buildCmsQuery`
-
-Lower-level helper that turns a declarative selection into a GraphQL `DocumentNode` plus variables. Used internally by `useCmsContent` and `fetchCmsContent`; exported so you can drive your own Apollo calls (cache reads, prefetching, batching, etc.).
-
-```ts
-import { buildCmsQuery } from "@asteroidcms/core-utils";
-
-const { query, variables, isSingle } = buildCmsQuery({
-  schema_slug: "news",
-  limit: 10,
-  status: "PUBLISHED",
-  select: ["title", "slug"],
-});
-
-const { data } = await apolloClient.query({ query, variables });
-const entries = isSingle ? data.entry : data.entries;
-```
 
 ---
 
@@ -306,6 +283,69 @@ const { mutate: removeComment } = useCmsMutate({
 });
 
 removeComment();
+```
+
+---
+
+## `cmsMutate` (Next.js / RSC)
+
+Server-side counterpart to `useCmsMutate`. Use it in Route Handlers, webhooks, cron jobs, or build scripts.
+
+```ts
+import { cmsMutate } from "@asteroidcms/core-utils";
+import { getClient } from "@/app/lib/cms-server";
+
+// Create
+const entry = await cmsMutate<{ id: string }>(getClient, {
+  schema_slug: "newsletter_subscribers",
+  mutationType: "create",
+  variables: { data: { email: "user@example.com", name: "Alice" } },
+});
+
+// Update
+await cmsMutate(getClient, {
+  schema_slug: "news",
+  mutationType: "update",
+  entryId: "abc123",
+  variables: { data: { title: "Updated title" } },
+});
+
+// Delete
+await cmsMutate(getClient, {
+  schema_slug: "comments",
+  mutationType: "delete",
+  entryId: "xyz789",
+});
+```
+
+---
+
+## `buildCmsQuery` / `buildCmsMutation`
+
+Lower-level helpers that turn a declarative selection into GraphQL `DocumentNode` plus variables. Used internally by the hooks and server helpers; exported so you can drive your own Apollo calls.
+
+```ts
+import { buildCmsQuery, buildCmsMutation } from "@asteroidcms/core-utils";
+
+// Query
+const { query, variables, isSingle } = buildCmsQuery({
+  schema_slug: "news",
+  limit: 10,
+  status: "PUBLISHED",
+  select: ["title", "slug"],
+});
+
+const { data } = await apolloClient.query({ query, variables });
+const entries = isSingle ? data.entry : data.entries;
+
+// Mutation
+const { mutation, variables: mutVars } = buildCmsMutation({
+  schema_slug: "news",
+  mutationType: "create",
+  variables: { data: { title: "Hello" } },
+});
+
+const { data: mutData } = await apolloClient.mutate({ mutation, variables: mutVars });
 ```
 
 ---
@@ -372,7 +412,7 @@ import { Info } from "lucide-react";
 />;
 ```
 
-Additional props: `contentRef` (forwards the wrapper element, useful for `useTableOfContents`), `onReady` (fires once enhancements have run), and `calloutIcons` (per-variant icon override for `<aside data-callout data-icon>` blocks).
+Additional props: `contentRef` (forwards the wrapper element, useful for scroll observers or ToC hooks), `onReady` (fires once enhancements have run), and `calloutIcons` (per-variant icon override for `<aside data-callout data-icon>` blocks).
 
 Or use the parser directly (server-safe, no `highlight.js`):
 
@@ -388,56 +428,24 @@ const html = parseRichText(article.body, {
 
 ### Table of contents
 
-Build a live, scroll-tracked ToC from rendered content with `useTableOfContents`. Pair it with `RichTextContent`'s `contentRef` prop:
-
-```tsx
-import { useRef } from "react";
-import {
-  RichTextContent,
-  useTableOfContents,
-} from "@asteroidcms/core-utils/client";
-
-function Article({ slug, html }: { slug: string; html: string }) {
-  const contentRef = useRef<HTMLElement | null>(null);
-  const { items, activeId } = useTableOfContents(contentRef, {
-    levels: [2, 3],
-    contentKey: slug,           // re-collect when content swaps
-    activationOffset: 96,       // px from viewport top
-  });
-
-  return (
-    <div className="flex gap-8">
-      <RichTextContent
-        html={html}
-        as="article"
-        className="prose"
-        contentRef={contentRef}
-      />
-      <nav>
-        {items.map((it) => (
-          <a
-            key={it.id}
-            href={`#${it.id}`}
-            className={it.id === activeId ? "font-semibold" : ""}
-          >
-            {it.text}
-          </a>
-        ))}
-      </nav>
-    </div>
-  );
-}
-```
-
-For a static, server-side outline (RSC layouts, sitemaps, RSS), use `extractHeadingsFromHtml`:
+Build a static ToC from HTML with `extractHeadingsFromHtml`, or extract headings from live DOM with `extractHeadingsFromElement`:
 
 ```ts
 import { extractHeadingsFromHtml } from "@asteroidcms/core-utils";
 
 const toc = extractHeadingsFromHtml(article.body, { levels: [2, 3] });
+// → [{ id: "intro", text: "Intro", level: 2 }, ...]
 ```
 
-See the [full rich-text docs](./docs/web-sdk-react/10-rich-text.md) for `classMap` variants, parser options, and `useTableOfContents` tuning.
+```ts
+import { extractHeadingsFromElement } from "@asteroidcms/core-utils/client";
+
+const toc = extractHeadingsFromElement(contentRef.current, { levels: [2, 3] });
+```
+
+Pair with `RichTextContent`'s `contentRef` prop and a scroll listener to build live active-heading tracking.
+
+See the [full rich-text docs](./docs/web-sdk-react/10-rich-text.md) for `classMap` variants, parser options, and code block features.
 
 ---
 

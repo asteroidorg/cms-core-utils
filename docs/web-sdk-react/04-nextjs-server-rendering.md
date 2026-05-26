@@ -1,25 +1,30 @@
 ---
 title: Next.js server rendering
-description: Fetch CMS content in Next.js Server Components, Route Handlers, and generateStaticParams using fetchCmsContent and a registered Apollo client.
+description: Fetch and mutate CMS content in Next.js Server Components, Route Handlers, and generateStaticParams using fetchCmsContent, cmsMutate, and a registered Apollo client.
 order: 4
 ---
 
 # Next.js server rendering
 
-`fetchCmsContent` is the non-React equivalent of `useCmsContent`. It lives in the **server-safe** entry point and runs anywhere Node runs:
+The SDK provides two server-side helpers that mirror the client hooks:
+
+| Helper | Purpose | Client equivalent |
+| --- | --- | --- |
+| `fetchCmsContent` | Read entries | `useCmsContent` |
+| `cmsMutate` | Create / update / delete entries | `useCmsMutate` |
+
+Both live in the **server-safe** entry point (`@asteroidcms/core-utils`) and work anywhere Node runs:
 
 - React Server Components
 - Route Handlers / API routes
 - `generateStaticParams`, `generateMetadata`
 - Cron jobs, build scripts, sitemap generators
 
-It accepts the same options object as `useCmsContent` and returns a `Promise` resolving to the entry (or list).
-
 ---
 
 ## Setup: register an Apollo client
 
-Server fetches need a server-side Apollo client. Use `registerApolloClient` from `@apollo/client-integration-nextjs` to build a per-request, deduplicated client. Put this in one shared file:
+Server fetches need a server-side Apollo client. Use `registerApolloClient` from `@apollo/client-integration-nextjs` to build a per-request, deduplicated client:
 
 ```ts
 // app/lib/cms-server.ts
@@ -33,7 +38,6 @@ export const { getClient, query, PreloadQuery } = registerApolloClient(() => {
     link: new HttpLink({
       uri: `${process.env.CMS_API_BASE_URL}/graphql`,
       headers: { "x-api-key": process.env.CMS_API_KEY ?? "" },
-      // Optional: let Next.js handle revalidation/tagging.
       fetchOptions: { next: { revalidate: 60, tags: ["cms"] } },
     }),
   });
@@ -46,7 +50,9 @@ export const { getClient, query, PreloadQuery } = registerApolloClient(() => {
 
 ---
 
-## Fetch a single entry
+## Reading content
+
+### Fetch a single entry
 
 ```tsx
 // app/blog/[slug]/page.tsx
@@ -71,11 +77,9 @@ export default async function Page({ params }: { params: { slug: string } }) {
 }
 ```
 
-`fetchCmsContent` unwraps the GraphQL envelope — you get the entry directly, not `{ data: { entry: … } }`.
+`fetchCmsContent` unwraps the GraphQL envelope — you get the entry directly, not `{ data: { entry: ... } }`.
 
----
-
-## Fetch a list
+### Fetch a list
 
 ```ts
 const posts = await fetchCmsContent<{ slug: string; title: string }[]>(
@@ -89,16 +93,11 @@ const posts = await fetchCmsContent<{ slug: string; title: string }[]>(
 );
 ```
 
-The same `filter`, `search`, `limit`, `offset`, and `status` options from `useCmsContent` work here — see [Filtering and search »](./07-filtering-and-search.md).
+The same `filter`, `search`, `limit`, `offset`, and `status` options from `useCmsContent` work here — see [Filtering and search](/docs/web-sdk-react/filtering-and-search).
 
----
-
-## `generateStaticParams`
+### `generateStaticParams`
 
 ```ts
-import { fetchCmsContent } from "@asteroidcms/core-utils";
-import { getClient } from "@/app/lib/cms-server";
-
 export async function generateStaticParams() {
   const posts = await fetchCmsContent<{ slug: string }[]>(getClient, {
     schema_slug: "blog-posts",
@@ -109,14 +108,10 @@ export async function generateStaticParams() {
 }
 ```
 
----
-
-## `generateMetadata`
+### `generateMetadata`
 
 ```ts
 import type { Metadata } from "next";
-import { fetchCmsContent } from "@asteroidcms/core-utils";
-import { getClient } from "@/app/lib/cms-server";
 
 export async function generateMetadata({
   params,
@@ -134,6 +129,56 @@ export async function generateMetadata({
   return { title: post.title, description: post.description };
 }
 ```
+
+---
+
+## Writing content from the server
+
+`cmsMutate` is the server-side counterpart to `useCmsMutate`. Use it in Route Handlers, webhooks, or any server context that needs to create, update, or delete entries.
+
+### Create an entry
+
+```ts
+// app/api/newsletter/route.ts
+import { cmsMutate } from "@asteroidcms/core-utils";
+import { getClient } from "@/app/lib/cms-server";
+
+export async function POST(req: Request) {
+  const { email, name } = await req.json();
+
+  const result = await cmsMutate<{ id: string }>(getClient, {
+    schema_slug: "newsletter_subscribers",
+    mutationType: "create",
+    variables: { data: { email, name } },
+  });
+
+  return Response.json({ id: result.id });
+}
+```
+
+### Update an entry
+
+```ts
+await cmsMutate(getClient, {
+  schema_slug: "blog-posts",
+  mutationType: "update",
+  entryId: "abc123",
+  variables: { data: { title: "Updated title" } },
+  select: ["title", "slug"],
+});
+```
+
+### Delete an entry
+
+```ts
+await cmsMutate(getClient, {
+  schema_slug: "comments",
+  mutationType: "delete",
+  entryId: "xyz789",
+});
+```
+
+> `cmsMutate` supports the same `select`, `fullData`, and selector syntax as `useCmsMutate`. See [Writing content](/docs/web-sdk-react/writing-content) for the full API.
 
 ---
 
@@ -177,46 +222,55 @@ export async function POST(req: Request) {
 
 ## Render rich text on the server
 
-The parser side of rich text is server-safe — import `parseRichText` or `<RichTextContent>` from the appropriate entry:
+The parser is server-safe — use `parseRichText` for fully static pages, or `<RichTextContent>` when you want client-side syntax highlighting:
 
 ```tsx
-import { fetchCmsContent } from "@asteroidcms/core-utils";
-import { RichTextContent } from "@asteroidcms/core-utils/client";
-import { getClient } from "@/app/lib/cms-server";
-
-export default async function Page() {
-  const post = await fetchCmsContent<{ body: string }>(getClient, {
-    schema_slug: "blog-posts",
-    entrySlug: "hello",
-    select: ["body"],
-  });
-
-  return <RichTextContent html={post.body} as="article" />;
-}
-```
-
-`<RichTextContent>` itself is a client component (it runs highlight.js after mount), but it's safe to render from a Server Component — Next.js will ship the necessary JS automatically.
-
-If you don't need syntax highlighting on the client, use the pure parser instead:
-
-```tsx
+// Fully static (no JS shipped for this component)
 import { parseRichText } from "@asteroidcms/core-utils";
 
 const html = parseRichText(post.body, { classMap: { p: "my-3" } });
 return <article dangerouslySetInnerHTML={{ __html: html }} />;
 ```
 
-That keeps the page fully static — no highlight.js shipped to the client.
+```tsx
+// With highlight.js (JS shipped automatically by Next.js)
+import { RichTextContent } from "@asteroidcms/core-utils/client";
+
+return <RichTextContent html={post.body} as="article" />;
+```
 
 ---
 
-## Combining with client-side hooks
+## Combining server and client
 
-Both flows can coexist. A common pattern:
+Both flows coexist naturally. A common pattern:
 
 - Server-render the article body (`fetchCmsContent` + `<RichTextContent>`).
-- Mount an interactive comments widget under `<AsteroidCMSProvider>` that uses `useCmsContent` to subscribe to live updates.
+- Mount an interactive comments widget under `<AsteroidCMSProvider>` that uses `useCmsContent` for live updates and `useCmsMutate` to post new comments.
 
-The two caches are independent — there's no shared store between the server's per-request Apollo client and the browser's `<AsteroidCMSProvider>` cache.
+The two caches are independent — there's no shared store between the server's per-request Apollo client and the browser's provider cache.
 
-Continue to **[Reading content »](./05-reading-content.md)**.
+---
+
+## fetchCmsContent vs. cmsMutate
+
+| | `fetchCmsContent` | `cmsMutate` |
+| --- | --- | --- |
+| **Purpose** | Read entries | Create / update / delete entries |
+| **Signature** | `fetchCmsContent<T>(getClient, opts)` | `cmsMutate<T>(getClient, opts)` |
+| **Returns** | The entry or array directly | The mutation result |
+| **API key scope** | Read is enough | Needs write scope |
+| **Caching** | Works with ISR / `unstable_cache` | Not cacheable (side effect) |
+
+---
+
+## FAQ
+
+**Can I use `fetchCmsContent` outside Next.js?**
+Yes. Pass any `() => ApolloClient` — e.g. `() => createApolloClient({ cmsUrl, apiKey })`. The `@apollo/client-integration-nextjs` bridge is only needed for per-request deduplication in Next.js.
+
+**Should I add `import "server-only"` to every file that uses `fetchCmsContent`?**
+Add it to the file that creates the Apollo client (the one with the write-scoped key). That's the security boundary. Individual page files don't need it unless they handle secrets directly.
+
+**Can `cmsMutate` trigger revalidation?**
+Not directly. Call `revalidateTag(...)` after the mutation in the same Route Handler to invalidate cached reads.

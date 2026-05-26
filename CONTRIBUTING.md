@@ -68,11 +68,16 @@ npm link @asteroidcms/core-utils
 
 ```
 src/
-├── index.ts                # public exports
+├── index.ts                # server-safe public exports
+├── client.ts               # client-safe public exports ("use client")
+├── build-query.ts          # buildCmsQuery — declarative → GraphQL query
+├── build-mutation.ts       # buildCmsMutation — declarative → GraphQL mutation
+├── fetchCmsContent.ts      # server-side query helper
+├── cmsMutate.ts            # server-side mutation helper
 ├── provider/               # AsteroidCMSProvider + context + types
 ├── apollo/                 # Apollo client factory + error link
 ├── hooks/                  # useCmsContent, useCmsMutate
-├── utils/                  # cmsImage, useCmsImage, getContentReadTime
+├── utils/                  # cmsImage, useCmsImage, getContentReadTime, extractHeadings
 └── components/             # RichTextContent + richTextParser
 ```
 

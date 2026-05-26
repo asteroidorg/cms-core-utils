@@ -1,18 +1,20 @@
 ---
 title: Advanced topics
-description: Low-level escape hatches — buildCmsQuery, BYO Apollo client, pagination merging, polling, cache eviction, performance tips, security, and further reading.
+description: Low-level escape hatches — buildCmsQuery, buildCmsMutation, BYO Apollo client, pagination merging, polling, cache eviction, performance tips, and security.
 order: 11
 ---
 
 # Advanced topics
 
-The hooks and `fetchCmsContent` cover the 80% case. This page is for everything else: building queries without executing them, sharing a client across apps, tuning the Apollo cache, and the rough edges worth knowing about in production.
+The hooks and server helpers cover the 80% case. This page is for everything else: building queries without executing them, sharing clients across apps, tuning the Apollo cache, and the rough edges worth knowing about in production.
 
 ---
 
-## `buildCmsQuery`: build queries without executing them
+## Build queries without executing them
 
-`buildCmsQuery` is the pure function that powers `useCmsContent`, `useCmsMutate`, and `fetchCmsContent`. Use it when you need the GraphQL document and variables but want to execute the query through your own pipeline (e.g. a custom Apollo link, GraphQL inspection tooling, persisted queries).
+### `buildCmsQuery`
+
+The pure function that powers `useCmsContent` and `fetchCmsContent`. Use it when you need the GraphQL document and variables but want to execute through your own pipeline.
 
 ```ts
 import { buildCmsQuery } from "@asteroidcms/core-utils";
@@ -23,16 +25,32 @@ const { query, variables, isSingle } = buildCmsQuery({
   select: ["title", "body"],
 });
 
-console.log(query.loc?.source.body); // → the printed GraphQL
-console.log(variables);              // → { schema_slug: "blog-posts", slug: "hello" }
-console.log(isSingle);               // → true
+console.log(query.loc?.source.body); // the printed GraphQL
+console.log(variables);              // { schema_slug: "blog-posts", slug: "hello" }
+console.log(isSingle);               // true
 ```
 
-Use cases:
-
+**Use cases:**
 - Wire into a non-Apollo fetcher (`graphql-request`, `urql`).
-- Inspect the generated query in tests.
+- Inspect generated queries in tests.
 - Compose with persisted-query workflows.
+
+### `buildCmsMutation`
+
+The mutation counterpart:
+
+```ts
+import { buildCmsMutation } from "@asteroidcms/core-utils";
+
+const { mutation, variables } = buildCmsMutation({
+  schema_slug: "blog-posts",
+  mutationType: "create",
+  select: ["title", "slug"],
+  variables: { data: { title: "Hello" } },
+});
+
+const { data } = await apolloClient.mutate({ mutation, variables });
+```
 
 ---
 
@@ -45,7 +63,6 @@ Use Apollo's `split` link to route operations by name or directive:
 ```ts
 import {
   ApolloClient,
-  ApolloLink,
   HttpLink,
   InMemoryCache,
   split,
@@ -71,11 +88,11 @@ const link = split(
 const client = new ApolloClient({ link, cache: new InMemoryCache() });
 ```
 
-Pass it via `<AsteroidCMSProvider client={client} cmsUrl={…} apiKey={…}>`.
+Pass it via `<AsteroidCMSProvider client={client} cmsUrl={...} apiKey={...}>`.
 
-### Two clients
+### Two separate clients
 
-Keep your existing `<ApolloProvider>` for your app data and let `<AsteroidCMSProvider>` mount its own underneath. Apollo's `<ApolloProvider>` replaces context, so the innermost wins for descendants — order matters.
+Keep your existing `<ApolloProvider>` for your app data and let `<AsteroidCMSProvider>` mount its own. Apollo's `<ApolloProvider>` replaces context — the innermost wins for descendants.
 
 ---
 
@@ -83,7 +100,7 @@ Keep your existing `<ApolloProvider>` for your app data and let `<AsteroidCMSPro
 
 ### Pagination merging
 
-If you call `useCmsContent` with rotating `offset` values and want the cache to merge results, configure `typePolicies` in the provider's `cacheConfig`:
+If you use `fetchMore` and want the cache to merge results, configure `typePolicies`:
 
 ```tsx
 <AsteroidCMSProvider
@@ -113,11 +130,11 @@ If you call `useCmsContent` with rotating `offset` values and want the cache to 
 </AsteroidCMSProvider>
 ```
 
-The `keyArgs` allowlist controls which arguments produce a *new* cache entry — `offset` and `limit` are intentionally excluded so they all roll into the same array.
+`keyArgs` controls which arguments produce a *new* cache entry — `offset` and `limit` are excluded so they merge into the same array.
 
 ### Polling
 
-`useCmsContent` returns Apollo's full result. Polling isn't exposed directly — fall back to `useQuery` by composing with `buildCmsQuery`:
+Polling isn't exposed directly on `useCmsContent`. Fall back to `useQuery` by composing with `buildCmsQuery`:
 
 ```tsx
 import { useQuery } from "@apollo/client/react";
@@ -135,7 +152,7 @@ Or `refetch` on an interval with `useEffect`.
 
 ### Cache eviction after mutations
 
-After a write you sometimes want to drop a cached entry rather than refetch it:
+Drop a cached entry rather than refetching:
 
 ```ts
 import { useApolloClient } from "@apollo/client/react";
@@ -145,37 +162,112 @@ client.cache.evict({ fieldName: "contentEntries" });
 client.cache.gc();
 ```
 
-Useful when you've changed a filter argument and don't want stale arrays lingering.
-
 ---
 
 ## Performance tips
 
-- **Prefer specific selectors over `fullData`.** Each `dataField` call on the server is cheaper than serializing the whole document, and you ship less JSON over the wire.
-- **Expand references only where used.** Each `expandedReference` adds a round trip on the resolver side. A 5-level deep expansion is rarely worth it — consider a denormalized field instead.
-- **Memoize big `classMap` objects.** `<RichTextContent>` re-parses when its inputs change. If the `classMap` is created inline on every render, parsing runs every render. Lift it to module scope.
-- **Cap `limit` per request.** `useCmsContent` happily issues `limit: 10000`. The server may not. Pick a paging size you can deliver in <200 ms and use `fetchMore` for the rest.
-- **Use `fetchCmsContent` for above-the-fold content** in Next.js. Server-rendered HTML hits the browser faster than a client-side roundtrip.
-- **Skip highlight.js when you don't need it.** Render via `parseRichText` + `dangerouslySetInnerHTML` for pages without code blocks.
+| Tip | Why |
+| --- | --- |
+| Prefer `select` over `fullData` | Each `dataField` is cheaper than serializing the whole document. |
+| Expand references only where used | Each `expandedReference` adds resolver cost. |
+| Memoize `classMap` objects | `<RichTextContent>` re-parses when inputs change. |
+| Cap `limit` per request | Use `fetchMore` instead of `limit: 10000`. |
+| Use `fetchCmsContent` for above-the-fold content | Server-rendered HTML loads faster. |
+| Skip highlight.js when not needed | Use `parseRichText` for pages without code blocks. |
 
 ---
 
 ## Security notes
 
-- **Never put a write key in `NEXT_PUBLIC_*` or any browser env var.** Public keys should be read-scoped. Write keys belong on the server.
-- **Sanitize untrusted regex input.** If you pass user input to `search.value`, escape regex metacharacters (e.g. with `escape-string-regexp`).
-- **Allowlist HTML carefully.** The default `parseRichText` allowlist is safe. If you extend it, audit every additional tag — especially `iframe`, `object`, `embed`, `form`, and `style`.
-- **Trust the `x-api-key` boundary.** It's a single header; rotating it via the `headers` prop is fine, but don't try to encode user identity in it. Use a separate auth mechanism for per-user access control.
-- **`import "server-only"` in your CMS-server file.** It makes the file fail loudly if a client component ever imports it, keeping your server-scoped key off the client bundle.
+| Rule | Details |
+| --- | --- |
+| Never put a write key in `NEXT_PUBLIC_*` | Public keys should be read-scoped. Write keys belong on the server. |
+| Sanitize untrusted regex input | Pass user input through `escape-string-regexp` before using in `search.value`. |
+| Allowlist HTML carefully | The default `parseRichText` allowlist is safe. Audit any additions — especially `iframe`, `object`, `embed`, `form`, `style`. |
+| Trust the `x-api-key` boundary | Don't encode user identity in it. Use a separate auth mechanism for per-user access. |
+| `import "server-only"` | Add it to your CMS server file to prevent write-scoped keys from leaking to the client bundle. |
+
+---
+
+## Complete API reference
+
+### Server-safe exports (`@asteroidcms/core-utils`)
+
+| Export | Type | Description |
+| --- | --- | --- |
+| `fetchCmsContent<T>(getClient, opts)` | Function | Server-side content reads. |
+| `cmsMutate<T>(getClient, opts)` | Function | Server-side content writes. |
+| `buildCmsQuery(opts)` | Function | Returns `{ query, variables, isSingle }`. |
+| `buildCmsMutation(opts)` | Function | Returns `{ mutation, variables }`. |
+| `createApolloClient(config)` | Function | Apollo client factory. |
+| `cmsImage(id, opts)` | Function | Asset URL builder. |
+| `parseRichText(html, opts)` | Function | HTML sanitizer/parser. |
+| `removeEmptyParagraphs(html)` | Function | Strips empty `<p>` tags. |
+| `getContentReadTime(html, opts)` | Function | Reading time estimator. |
+| `extractHeadingsFromHtml(html, opts)` | Function | Static heading extraction. |
+| `extractHeadingsFromElement(el, opts)` | Function | Live DOM heading extraction. |
+| `slugify(text)` | Function | URL-safe slug generator. |
+
+### Client-safe exports (`@asteroidcms/core-utils/client`)
+
+| Export | Type | Description |
+| --- | --- | --- |
+| `AsteroidCMSProvider` | Component | Apollo + config provider. |
+| `useAsteroidCMSConfig()` | Hook | Read resolved config from provider. |
+| `useCmsContent<T>(opts)` | Hook | Client-side content reads. |
+| `useCmsMutate<T>(opts)` | Hook | Client-side content writes. |
+| `useCmsImage()` | Hook | Asset URL builder (from context). |
+| `RichTextContent` | Component | Rich-text renderer with highlighting. |
+| `extractHeadingsFromElement(el, opts)` | Function | Re-exported for convenience. |
+| `extractHeadingsFromHtml(html, opts)` | Function | Re-exported for convenience. |
+| `slugify(text)` | Function | Re-exported for convenience. |
+
+### Type exports
+
+```ts
+import type {
+  AsteroidCMSConfig,
+  ResolvedAsteroidCMSConfig,
+  AsteroidCMSProviderProps,
+  UseCmsContentOptions,
+  UseCmsMutateOptions,
+  CmsMutateOptions,
+  MutationType,
+  FieldSelector,
+  ReferenceExpansion,
+  ContentStatus,
+  CmsSearchCondition,
+  RichTextClassMap,
+  RichTextClassKey,
+  ParseRichTextOptions,
+  HeadingLevel,
+  ExtractedHeading,
+  ExtractHeadingsOptions,
+} from "@asteroidcms/core-utils";
+```
 
 ---
 
 ## Further reading
 
-- Apollo Client v4 — https://www.apollographql.com/docs/react/
-- Apollo's Next.js integration — https://github.com/apollographql/apollo-client-integrations
-- highlight.js languages and themes — https://highlightjs.org/
-- Next.js Server Components — https://nextjs.org/docs/app/building-your-application/rendering/server-components
+- [Apollo Client v4 docs](https://www.apollographql.com/docs/react/)
+- [Apollo's Next.js integration](https://github.com/apollographql/apollo-client-integrations)
+- [highlight.js languages and themes](https://highlightjs.org/)
+- [Next.js Server Components](https://nextjs.org/docs/app/building-your-application/rendering/server-components)
 - Asteroid CMS API reference — see your CMS instance's `/docs` route
 
-If you hit something the SDK can't express, drop the hooks and use `buildCmsQuery` + your own Apollo client — that's the supported escape hatch and the same code path the SDK itself uses internally.
+---
+
+## FAQ
+
+**What if the SDK can't express what I need?**
+Drop the hooks and use `buildCmsQuery` or `buildCmsMutation` with your own Apollo client. That's the supported escape hatch — the same code path the SDK itself uses.
+
+**Can I use the SDK with `urql` instead of Apollo?**
+Not directly for the hooks (they use Apollo's `useQuery`/`useMutation`). But `buildCmsQuery` and `buildCmsMutation` return standard `DocumentNode` objects that work with any GraphQL client.
+
+**How do I debug what query is being sent?**
+Use `buildCmsQuery` to print the query, or check the Network tab in browser DevTools for the GraphQL payload.
+
+**Is there a way to add polling to `useCmsContent`?**
+Not built in. Compose `buildCmsQuery` with Apollo's `useQuery` and its `pollInterval` option as shown above.

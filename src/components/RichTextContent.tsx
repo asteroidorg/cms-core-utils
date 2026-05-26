@@ -31,8 +31,8 @@ interface RichTextContentProps {
    */
   onReady?: (root: HTMLElement) => void;
   /**
-   * Optional ref to the wrapper element. Useful for hooks like
-   * `useTableOfContents` that need a stable reference to the rendered tree.
+   * Optional ref to the wrapper element. Useful for consumers that need a
+   * stable reference to the rendered tree (e.g. scroll observers, ToC hooks).
    */
   contentRef?: React.MutableRefObject<HTMLElement | null>;
   /**
@@ -920,8 +920,8 @@ export function RichTextContent({
   // Pass the stable object ref directly — using an inline callback ref here
   // would be recreated on every render, causing React to null-then-reset the
   // ref on each commit. That churn breaks downstream observers
-  // (`useTableOfContents`, custom MutationObservers) that expect the node
-  // identity to be stable across renders of the same article.
+  // (MutationObservers, IntersectionObservers) that expect the node identity
+  // to be stable across renders of the same article.
   return (
     <Fragment>
       {createElement(as, {

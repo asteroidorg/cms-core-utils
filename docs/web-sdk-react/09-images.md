@@ -1,25 +1,25 @@
 ---
 title: Images
-description: Resolve CMS asset ids into canonical media URLs with cmsImage (pure function) or useCmsImage (hook), and integrate with Next.js' Image component.
+description: Resolve CMS asset IDs into canonical media URLs with cmsImage (pure function) or useCmsImage (hook), and integrate with Next.js Image.
 order: 9
 ---
 
 # Images
 
-CMS entries store images as asset ids — short opaque strings. The SDK ships two helpers that resolve them into canonical URLs.
+CMS entries store images as asset IDs — short opaque strings. The SDK ships two helpers that resolve them into canonical URLs.
 
-| Use this        | Where                                                 | Import from                       |
-| --------------- | ----------------------------------------------------- | --------------------------------- |
-| `cmsImage(id, opts)` | Loaders, scripts, server code, anywhere without React context. | `@asteroidcms/core-utils`         |
-| `useCmsImage()`      | React components under `<AsteroidCMSProvider>`.        | `@asteroidcms/core-utils/client`  |
+| Use this | Where | Import from |
+| --- | --- | --- |
+| `cmsImage(id, opts)` | Loaders, scripts, server code — anywhere without React context. | `@asteroidcms/core-utils` |
+| `useCmsImage()` | React components under `<AsteroidCMSProvider>`. | `@asteroidcms/core-utils/client` |
 
-Both ultimately build the same URL: `${cmsUrl}${mediaPath}/${id}`.
+Both build the same URL: `${cmsUrl}${mediaPath}/${id}`.
 
 ---
 
-## `cmsImage(id, { cmsUrl, mediaPath? })`
+## `cmsImage` — pure function
 
-Pure function. Use when you can't (or don't want to) read the provider context.
+Use when you can't (or don't want to) read the provider context.
 
 ```ts
 import { cmsImage } from "@asteroidcms/core-utils";
@@ -30,17 +30,19 @@ const url = cmsImage("64f1a2b3c4d5e6f7a8b9c0d1", {
 // → "https://cms.example.com/media/canonical/64f1a2b3c4d5e6f7a8b9c0d1"
 ```
 
-Behavior:
+### Behavior
 
-- Trailing slashes on `cmsUrl` are trimmed.
-- A leading slash is forced on `mediaPath`. Defaults to `/media/canonical`.
-- A falsy `id` returns `""` — convenient for conditional rendering: `<img src={cmsImage(id, opts) || fallback} />`.
+| Input | Result |
+| --- | --- |
+| Trailing slash on `cmsUrl` | Trimmed automatically. |
+| `mediaPath` without leading slash | Forced to start with `/`. Defaults to `/media/canonical`. |
+| Falsy `id` | Returns `""` — convenient for conditional rendering. |
 
 ---
 
-## `useCmsImage()`
+## `useCmsImage` — hook
 
-Hook variant that reads `cmsUrl` and `mediaPath` from the provider. Returns a stable function so you can use it many times in one component without re-reading context.
+Reads `cmsUrl` and `mediaPath` from the provider. Returns a stable function.
 
 ```tsx
 "use client";
@@ -84,7 +86,7 @@ export function Hero({ heroId }: { heroId: string }) {
 }
 ```
 
-Add your CMS host to `next.config.js` under `images.remotePatterns` so the Next image optimizer is allowed to fetch it:
+Add your CMS host to `next.config.js` so the image optimizer can fetch it:
 
 ```js
 // next.config.js
@@ -97,10 +99,11 @@ module.exports = {
 };
 ```
 
-For server-rendered images where you can't call hooks, use the pure `cmsImage` with envs:
+For server-rendered images where you can't call hooks, use the pure function:
 
 ```tsx
 import { cmsImage } from "@asteroidcms/core-utils";
+import Image from "next/image";
 
 <Image
   src={cmsImage(heroId, { cmsUrl: process.env.CMS_API_BASE_URL! })}
@@ -128,7 +131,7 @@ If your CMS exposes resized variants on a different path:
 
 All `useCmsImage()` calls below the provider now build URLs like `https://cms.example.com/cdn/v2/<id>`.
 
-To override per-call without changing the provider, fall back to the pure function:
+To override per-call without changing the provider:
 
 ```ts
 cmsImage(id, { cmsUrl: "https://cms.example.com", mediaPath: "/cdn/preview" });
@@ -138,10 +141,10 @@ cmsImage(id, { cmsUrl: "https://cms.example.com", mediaPath: "/cdn/preview" });
 
 ## Wrapping for project-specific behavior
 
-If your app passes a mix of asset ids, already-canonical URLs, and local static paths through the same renderer, write a thin wrapper around `cmsImage`:
+If your app passes a mix of asset IDs, full URLs, and local paths, write a thin wrapper:
 
 ```ts
-// lib/cms-image.ts
+// lib/resolve-asset.ts
 import { cmsImage } from "@asteroidcms/core-utils";
 import { ENV } from "@/config/env";
 
@@ -158,6 +161,28 @@ export function resolveAsset(value?: string | null): string {
 }
 ```
 
-That keeps the rendering site simple (`<img src={resolveAsset(post.cover)} />`) and isolates path-shape decisions in one file.
+This keeps the rendering site simple (`<img src={resolveAsset(post.cover)} />`) and isolates path-shape decisions in one file.
 
-Continue to **[Rich text »](./10-rich-text.md)**.
+---
+
+## Comparison: `cmsImage` vs. `useCmsImage`
+
+| | `cmsImage` | `useCmsImage` |
+| --- | --- | --- |
+| **Type** | Pure function | React hook |
+| **Needs provider** | No — pass `cmsUrl` explicitly | Yes — reads from context |
+| **Works on server** | Yes | No (client only) |
+| **Best for** | Build scripts, SSR, loaders | Client Components |
+
+---
+
+## FAQ
+
+**What if the asset ID doesn't exist?**
+The URL is still built — the CMS will return a 404. Handle this in your `<img>` `onError` handler or with a fallback image.
+
+**Can I use this for non-image assets (PDFs, videos)?**
+Yes. `cmsImage` just builds a URL — the CMS serves whatever the asset is. The name is a misnomer inherited from the original use case.
+
+**Does `useCmsImage` re-render when the provider changes?**
+Only if `cmsUrl` or `mediaPath` changes, which is rare. The returned function is stable across renders.

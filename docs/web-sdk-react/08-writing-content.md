@@ -1,41 +1,47 @@
 ---
 title: Writing content
-description: Create, update, and delete CMS entries from React with useCmsMutate — plus patterns for refreshing related reads, optimistic UI, and cache invalidation.
+description: Create, update, and delete CMS entries from React with useCmsMutate and from the server with cmsMutate — plus patterns for cache invalidation and optimistic UI.
 order: 8
 ---
 
 # Writing content
 
-`useCmsMutate` is the mutation counterpart to `useCmsContent`. It builds a typed GraphQL mutation for `createContentEntry`, `updateContentEntry`, or `deleteContentEntry`, returns the same `[mutate, result]` surface as Apollo's `useMutation`, and reuses the field selector syntax from [Selectors and references »](./06-selectors-and-references.md).
+The SDK provides two mutation APIs:
 
-It lives on the **client** subpath:
+| Use this | When | Import from |
+| --- | --- | --- |
+| `useCmsMutate` | Client Components, interactive forms | `@asteroidcms/core-utils/client` |
+| `cmsMutate` | Server Components, Route Handlers, webhooks, scripts | `@asteroidcms/core-utils` |
 
-```ts
-import { useCmsMutate } from "@asteroidcms/core-utils/client";
-```
+Both build a typed GraphQL mutation for `createContentEntry`, `updateContentEntry`, or `deleteContentEntry` and reuse the field selector syntax from [Selectors and references](/docs/web-sdk-react/selectors-and-references).
 
-> Write operations need a **write-scoped** API key. Do not ship a write key to the browser. For privileged writes, proxy through a server route — your Next.js Route Handler can use `fetchCmsContent` or call Apollo directly with a server-side key.
+> **Security:** Write operations need a **write-scoped** API key. Do not ship a write key to the browser. For privileged writes, proxy through a server route — your Route Handler can use `cmsMutate` with a server-side key.
 
 ---
 
-## API
+## Client-side: `useCmsMutate`
+
+### API
 
 ```ts
 useCmsMutate<TData = unknown>({
-  schema_slug,           // required: target schema slug
+  schema_slug,           // required — target schema slug
   mutationType,          // "create" | "update" | "delete" (default: "create")
   entryId,               // required for "update" and "delete"
-  select,                // selection returned after the mutation
-  fullData,              // also include the raw `data` blob in the result
+  select,                // fields returned after the mutation
+  fullData,              // include the raw `data` blob in the result
   variables,             // initial variables; overridable per-call
-}): { mutate, loading, error, data: TData | undefined, ... }
+}): {
+  mutate: MutationFunction;
+  loading: boolean;
+  error: ApolloError | undefined;
+  data: TData | undefined;
+}
 ```
 
-The returned `mutate` is Apollo's mutation function — call it to fire the request, optionally with per-call `variables`.
+The returned `mutate` is Apollo's mutation function — call it to fire the request.
 
----
-
-## Create
+### Create
 
 ```tsx
 "use client";
@@ -71,7 +77,7 @@ export function NewPostForm() {
       <input name="title" required />
       <input name="slug" required />
       <textarea name="body" />
-      <button disabled={loading}>{loading ? "Saving…" : "Create"}</button>
+      <button disabled={loading}>{loading ? "Saving..." : "Create"}</button>
       {error && <p>{error.message}</p>}
       {data && <p>Created: {data.title}</p>}
     </form>
@@ -81,9 +87,7 @@ export function NewPostForm() {
 
 The hook always includes `id`, `status`, `version`, `created_at`, `updated_at`, and the entry's `schema { id, slug }` in the response. Your `select` adds to that base set.
 
----
-
-## Update
+### Update
 
 Updates require the entry's `id` (not its slug):
 
@@ -99,7 +103,7 @@ await mutate({
   variables: {
     data: {
       title: "Edited title",
-      // any fields you omit are left untouched
+      // omitted fields are left untouched
     },
   },
 });
@@ -107,11 +111,7 @@ await mutate({
 
 `data` is a partial patch. To clear a field, pass `null` explicitly (`{ subtitle: null }`).
 
-> The hook prints a console warning if you call `mutate` for `update`/`delete` without `entryId`. The server will reject the request — it does not surface a friendlier error on its own.
-
----
-
-## Delete
+### Delete
 
 ```tsx
 const { mutate, loading } = useCmsMutate({
@@ -126,13 +126,48 @@ async function onDelete() {
 }
 ```
 
-No `data` variable is sent for deletes — Apollo will ignore an extra `variables.data` if you pass it.
+No `data` variable is sent for deletes.
+
+---
+
+## Server-side: `cmsMutate`
+
+`cmsMutate` is the async counterpart for server contexts. It accepts a `getClient` function (same as `fetchCmsContent`) and returns the mutation result directly.
+
+```ts
+import { cmsMutate } from "@asteroidcms/core-utils";
+import { getClient } from "@/app/lib/cms-server";
+
+// Create
+const entry = await cmsMutate<{ id: string }>(getClient, {
+  schema_slug: "newsletter_subscribers",
+  mutationType: "create",
+  variables: { data: { email: "user@example.com", name: "Alice" } },
+});
+
+// Update
+await cmsMutate(getClient, {
+  schema_slug: "blog-posts",
+  mutationType: "update",
+  entryId: "abc123",
+  variables: { data: { title: "Updated title" } },
+});
+
+// Delete
+await cmsMutate(getClient, {
+  schema_slug: "comments",
+  mutationType: "delete",
+  entryId: "xyz789",
+});
+```
+
+`cmsMutate` supports the same `select`, `fullData`, and selector syntax as `useCmsMutate`.
 
 ---
 
 ## Refreshing reads after a write
 
-The CMS doesn't know which of your `useCmsContent` queries depend on the mutated entry. You have three options.
+The CMS doesn't know which `useCmsContent` queries depend on the mutated entry. You have three options:
 
 ### 1. Refetch the affected queries
 
@@ -159,7 +194,7 @@ await mutate({
 
 Query names are generated as `Get{schema_slug}Entries` (list) and `Get{schema_slug}Entry` (single). The schema slug is interpolated verbatim — no kebab→camel conversion.
 
-### 3. Update the cache directly
+### 3. Optimistic response + cache update
 
 For low-latency UX, pair `optimisticResponse` with an `update` function:
 
@@ -188,48 +223,21 @@ Optimistic responses unblock the UI instantly; if the server rejects, Apollo rol
 
 ---
 
-## Selecting nested data after a mutation
+## `useCmsMutate` vs. `cmsMutate`
 
-The same selector syntax from `useCmsContent` works here:
-
-```tsx
-useCmsMutate({
-  schema_slug: "blog-posts",
-  mutationType: "update",
-  entryId,
-  select: [
-    "title",
-    { field: "author", single: true, select: ["name", "avatar"] },
-  ],
-});
-```
-
-After the mutation succeeds, `data.author` is populated by re-resolving the expansion against the saved entry.
-
----
-
-## `fullData` on writes
-
-Useful for forms that re-hydrate from the server's canonical version after save:
-
-```tsx
-const { mutate, data } = useCmsMutate<{ id: string; data: Record<string, unknown> }>({
-  schema_slug: "blog-posts",
-  mutationType: "update",
-  entryId,
-  fullData: true,
-});
-
-useEffect(() => {
-  if (data) setFormState(data.data);
-}, [data]);
-```
+| | `useCmsMutate` | `cmsMutate` |
+| --- | --- | --- |
+| **Runtime** | Client (React) | Server (Node) |
+| **Returns** | `{ mutate, loading, error, data }` | `Promise<T>` |
+| **Apollo integration** | Full hooks, cache updates, optimistic UI | Direct call, no cache |
+| **API key scope** | Read or write (browser) | Write-scoped (server) |
+| **Import** | `@asteroidcms/core-utils/client` | `@asteroidcms/core-utils` |
 
 ---
 
 ## Handling errors
 
-`useCmsMutate` returns the same `error` field as `useMutation`. For app-wide error handling, wire the provider's `onError`:
+### App-wide error handling
 
 ```tsx
 <AsteroidCMSProvider
@@ -237,11 +245,11 @@ useEffect(() => {
   apiKey={key}
   onError={(err) => toast.error(extractMessage(err))}
 >
-  …
+  ...
 </AsteroidCMSProvider>
 ```
 
-Per-call handling stays local:
+### Per-call handling
 
 ```tsx
 try {
@@ -254,16 +262,52 @@ if (result.error) {
 }
 ```
 
-Apollo also exposes `error.graphQLErrors` for structured server-side validation messages.
+Apollo exposes `error.graphQLErrors` for structured server-side validation messages.
+
+---
+
+## `buildCmsMutation`: build mutations without executing them
+
+`buildCmsMutation` is the pure function that powers `useCmsMutate` and `cmsMutate`. Use it when you need the GraphQL document and variables but want to execute through your own pipeline.
+
+```ts
+import { buildCmsMutation } from "@asteroidcms/core-utils";
+
+const { mutation, variables } = buildCmsMutation({
+  schema_slug: "blog-posts",
+  mutationType: "create",
+  select: ["title", "slug"],
+  variables: { data: { title: "Hello", slug: "hello" } },
+});
+
+// Execute with your own client
+const { data } = await apolloClient.mutate({ mutation, variables });
+```
 
 ---
 
 ## Caveats
 
-- **`mutationType` cannot change mid-mutation.** Switch types between calls, not during a single `mutate()` lifecycle.
-- **No built-in optimistic UI.** Use Apollo's `optimisticResponse` — the SDK doesn't ship a higher-level wrapper.
-- **The mutation name is schema-slug derived.** `refetchQueries: ["GetblogpostsEntries"]` matches the slug `blog-posts`. Hyphens are kept.
-- **`entryId` is the entry's id, not its slug.** Slugs may collide across schemas; ids never do.
-- **Hooks live on `/client`.** Importing `useCmsMutate` from the root path will fail; use `@asteroidcms/core-utils/client`.
+| Issue | Details |
+| --- | --- |
+| `mutationType` can't change mid-mutation | Switch types between calls, not during a single `mutate()` lifecycle. |
+| No built-in optimistic UI | Use Apollo's `optimisticResponse` — the SDK doesn't ship a higher-level wrapper. |
+| Mutation name is schema-slug derived | `refetchQueries: ["GetblogpostsEntries"]` matches slug `blog-posts`. Hyphens are kept. |
+| `entryId` is the entry's ID, not its slug | Slugs may collide across schemas; IDs never do. |
+| Hooks live on `/client` | Importing `useCmsMutate` from the root path will fail. |
 
-Continue to **[Images »](./09-images.md)**.
+---
+
+## FAQ
+
+**Can I do mutations from a Server Component directly?**
+No. Server Components can't call `useCmsMutate` (it's a hook). Use `cmsMutate` in a Route Handler or Server Action instead.
+
+**What does the base response include?**
+Every mutation response includes `id`, `status`, `version`, `created_at`, `updated_at`, and `schema { id, slug }` — plus any fields from your `select`.
+
+**How do I clear a field?**
+Pass `null` explicitly in the `data` object: `{ subtitle: null }`. Omitting a field leaves it untouched.
+
+**Can I use `cmsMutate` outside Next.js?**
+Yes. Pass any `() => { mutate: (...) => ... }` — the function just needs to expose a `mutate` method compatible with Apollo's signature.

@@ -1,8 +1,10 @@
-import type { ApolloClient } from "@apollo/client";
 import { buildCmsQuery, type UseCmsContentOptions } from "./build-query";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyApolloClient = { query: (...args: any[]) => any };
+
 export async function fetchCmsContent<T>(
-  getClient: () => ApolloClient,
+  getClient: () => AnyApolloClient,
   opts: UseCmsContentOptions,
 ): Promise<T> {
   const { query, variables, isSingle } = buildCmsQuery(opts);
