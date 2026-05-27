@@ -1,7 +1,8 @@
 import {
   createElement,
   Fragment,
-  useEffect,
+  memo,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -212,32 +213,35 @@ function isIconEnabled(el: Element): boolean {
  */
 function enhanceCallouts(
   root: HTMLElement,
+  calloutIcons?: Partial<Record<string, ReactNode>>,
 ): Array<{ el: HTMLElement; variant: string }> {
   const callouts = root.querySelectorAll<HTMLElement>("aside[data-callout]");
   callouts.forEach((el) => {
-    if (el.dataset.rtCalloutEnhanced === "1") return;
-    el.dataset.rtCalloutEnhanced = "1";
-    if (!isIconEnabled(el)) return;
     if (el.querySelector(":scope > .rt-callout-icon")) return;
+    if (!isIconEnabled(el)) return;
     const variant = calloutVariantOf(el);
     const icon = document.createElement("span");
     icon.className = "rt-callout-icon";
     icon.dataset.variant = variant;
     icon.setAttribute("aria-hidden", "true");
+    if (!calloutIcons || !(variant in calloutIcons)) {
+      icon.innerHTML = CALLOUT_ICON_SVG[variant] ?? CALLOUT_ICON_SVG.default;
+    }
     el.prepend(icon);
   });
+  if (!calloutIcons) return [];
   const chips: Array<{ el: HTMLElement; variant: string }> = [];
   root
     .querySelectorAll<HTMLElement>(
       "aside[data-callout] > .rt-callout-icon",
     )
     .forEach((chip) => {
-      chips.push({
-        el: chip,
-        variant:
-          chip.dataset.variant ||
-          (chip.parentElement?.getAttribute("data-variant") ?? "default"),
-      });
+      const variant =
+        chip.dataset.variant ||
+        (chip.parentElement?.getAttribute("data-variant") ?? "default");
+      if (variant in calloutIcons) {
+        chips.push({ el: chip, variant });
+      }
     });
   return chips;
 }
@@ -245,10 +249,8 @@ function enhanceCallouts(
 function enhanceBlockquotes(root: HTMLElement) {
   const quotes = root.querySelectorAll<HTMLQuoteElement>("blockquote");
   quotes.forEach((bq) => {
-    if (bq.dataset.rtQuoted === "1") return;
-    // Pullquotes inside a figure already get curly quotes from the parser.
+    if (bq.querySelector(":scope > .rt-quote-open")) return;
     if (bq.closest('figure[data-variant="pullquote"]')) return;
-    bq.dataset.rtQuoted = "1";
 
     const { first, last } = findQuoteBody(bq);
     if (!first || !last) return;
@@ -309,11 +311,10 @@ function highlightCodeBlock(pre: HTMLPreElement) {
   if (!lang) return;
   const code = pre.querySelector("code");
   if (!code) return;
-  if ((code as HTMLElement).dataset.rtHighlighted === "1") return;
+  if (code.classList.contains("hljs")) return;
   const source = code.textContent ?? "";
   code.innerHTML = highlightSource(source, lang);
   code.classList.add("hljs");
-  (code as HTMLElement).dataset.rtHighlighted = "1";
 }
 
 const DIFF_SEPARATOR_RE = /\n?@@---@@\n?/;
@@ -460,8 +461,7 @@ function buildCodeBlockLabel(pre: HTMLPreElement): HTMLElement | null {
 function enhanceCodeBlocks(root: HTMLElement) {
   const blocks = root.querySelectorAll<HTMLPreElement>("pre");
   blocks.forEach((pre) => {
-    if (pre.dataset.rtEnhanced === "1") return;
-    pre.dataset.rtEnhanced = "1";
+    if (pre.classList.contains("rt-codeblock")) return;
     pre.classList.add("rt-codeblock");
 
     const variant = pre.dataset.variant;
@@ -841,7 +841,7 @@ function BuiltinCalloutIcon({ variant }: { variant: string }) {
   return <span dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-export function RichTextContent({
+export const RichTextContent = memo(function RichTextContent({
   html,
   classMap,
   as = "div",
@@ -860,79 +860,50 @@ export function RichTextContent({
   );
 
   const ref = useRef<HTMLElement | null>(null);
-  const [chips, setChips] = useState<CalloutChip[]>([]);
+  const prevSafe = useRef("");
+  const chipsRef = useRef<CalloutChip[]>([]);
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+  const contentRefStable = useRef(contentRef);
+  contentRefStable.current = contentRef;
+  const calloutIconsRef = useRef(calloutIcons);
+  calloutIconsRef.current = calloutIcons;
 
-  useEffect(() => {
+  const [renderKey, setRenderKey] = useState(0);
+
+  useLayoutEffect(() => {
     ensureCodeBlockStyles();
     const root = ref.current;
     if (!root) return;
-    if (contentRef) contentRef.current = root;
+    if (contentRefStable.current) contentRefStable.current.current = root;
+    if (prevSafe.current === safe) return;
+    prevSafe.current = safe;
 
-    // `dangerouslySetInnerHTML` rebuilds the subtree whenever the parsed HTML
-    // changes — and on a parent re-render that produces a new `html` string
-    // reference even with identical content (common with Apollo's
-    // `cache-and-network` returning a fresh object after a background
-    // refetch). The freshly-mounted `<pre>` / `<blockquote>` nodes carry no
-    // `data-rt-*` markers, so re-enhancing is just a matter of re-running
-    // the helpers. A `MutationObserver` makes that automatic: any subtree
-    // mutation triggers a re-application, so syntax highlighting and copy
-    // buttons survive every kind of re-render without the consumer having
-    // to think about effect deps or stable prop identity.
-    const apply = () => {
-      // The enhancers themselves mutate the subtree (inject copy buttons,
-      // rewrite `<code>` innerHTML for hljs). Disconnect while running so
-      // the observer doesn't loop on its own writes.
-      mo.disconnect();
-      enhanceCodeBlocks(root);
-      enhanceBlockquotes(root);
-      const nextChips = enhanceCallouts(root);
-      // Equality short-circuit so re-renders triggered by other DOM
-      // mutations (highlighter writes, copy buttons) don't loop us through
-      // setState → portal write → MO fires → apply → setState…
-      setChips((prev) => (calloutChipsEqual(prev, nextChips) ? prev : nextChips));
-      onReady?.(root);
-      mo.observe(root, { childList: true, subtree: true });
-    };
+    root.innerHTML = safe;
+    enhanceCodeBlocks(root);
+    enhanceBlockquotes(root);
+    const nextChips = enhanceCallouts(root, calloutIconsRef.current);
 
-    let raf = 0;
-    const mo = new MutationObserver(() => {
-      // Coalesce bursts of mutations from a single React commit into one
-      // enhancement pass.
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        apply();
-      });
-    });
+    if (!calloutChipsEqual(chipsRef.current, nextChips)) {
+      chipsRef.current = nextChips;
+      if (nextChips.length > 0) setRenderKey((n) => n + 1);
+    }
 
-    apply();
+    onReadyRef.current?.(root);
+  }, [safe]);
 
-    return () => {
-      mo.disconnect();
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [safe, onReady, contentRef]);
+  void renderKey;
 
-  // `createElement` avoids the JSX type explosion that happens when a dynamic
-  // `<Tag />` widens to the union of every IntrinsicElement
-  // (TS2590: Expression produces a union type that is too complex to represent).
-  //
-  // Pass the stable object ref directly — using an inline callback ref here
-  // would be recreated on every render, causing React to null-then-reset the
-  // ref on each commit. That churn breaks downstream observers
-  // (MutationObservers, IntersectionObservers) that expect the node identity
-  // to be stable across renders of the same article.
   return (
     <Fragment>
       {createElement(as, {
         ref,
         className,
-        dangerouslySetInnerHTML: { __html: safe },
       })}
-      {chips.map((chip, i) =>
+      {chipsRef.current.map((chip, i) =>
         createPortal(
-          calloutIcons && chip.variant in calloutIcons ? (
-            calloutIcons[chip.variant]
+          calloutIconsRef.current && chip.variant in calloutIconsRef.current ? (
+            calloutIconsRef.current[chip.variant]
           ) : (
             <BuiltinCalloutIcon variant={chip.variant} />
           ),
@@ -942,4 +913,21 @@ export function RichTextContent({
       )}
     </Fragment>
   );
+}, richTextPropsEqual);
+
+function richTextPropsEqual(
+  prev: RichTextContentProps,
+  next: RichTextContentProps,
+): boolean {
+  if (prev.html !== next.html) return false;
+  if (prev.classMap !== next.classMap) return false;
+  if (prev.as !== next.as) return false;
+  if (prev.className !== next.className) return false;
+  const prevKeys = prev.calloutIcons ? Object.keys(prev.calloutIcons) : [];
+  const nextKeys = next.calloutIcons ? Object.keys(next.calloutIcons) : [];
+  if (prevKeys.length !== nextKeys.length) return false;
+  for (const k of nextKeys) {
+    if (!prevKeys.includes(k)) return false;
+  }
+  return true;
 }
