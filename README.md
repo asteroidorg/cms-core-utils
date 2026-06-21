@@ -1,7 +1,7 @@
 <div align="center">
   <h1>
     <div style="display: inline-flex; align-items: center; gap: 4px;">
-      <img src="https://cms.theasteroid.tech/logo/logo_gradient.svg" alt="@asteroidcms" height="25px" />
+      <img src="https://cms.theasteroid.tech/logo/logo.svg" alt="@asteroidcms" height="25px" />
       <span>/core-utils</span>
     </div>
   </h1>
