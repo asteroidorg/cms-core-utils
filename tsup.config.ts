@@ -42,4 +42,10 @@ export default defineConfig([
       ]);
     },
   },
+  {
+    ...shared,
+    entry: { next: "src/next.ts" },
+    clean: false,
+    external: [...shared.external, "next"],
+  },
 ]);

@@ -28,3 +28,29 @@ export type {
   ExtractedHeading,
   ExtractHeadingsOptions,
 } from "./utils/extractHeadings";
+
+// SEO + page components (client)
+export { Seo, JsonLd } from "./seo/Seo";
+
+export { AsteroidArticlePage } from "./components/AsteroidArticlePage";
+export type {
+  AsteroidArticlePageProps,
+  AsteroidArticlePagePost,
+  AsteroidArticlePageUseArticle,
+  AsteroidArticlePageUseArticleResult,
+} from "./components/AsteroidArticlePage";
+
+export {
+  AsteroidArticlesListing,
+  useAsteroidArticlesState,
+  defaultGroupPostsByCategory,
+  defaultGetCategoryName,
+} from "./components/AsteroidArticlesListing";
+export type {
+  AsteroidArticlesProps,
+  AsteroidArticlePost,
+  AsteroidArticleCategoryGroup,
+  AsteroidArticlesState,
+  AsteroidArticlesUsePosts,
+  AsteroidArticlesUsePostsResult,
+} from "./components/AsteroidArticlesListing";

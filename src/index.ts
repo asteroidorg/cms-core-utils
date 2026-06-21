@@ -59,3 +59,43 @@ export type {
   ExtractedHeading,
   ExtractHeadingsOptions,
 } from "./utils/extractHeadings";
+
+// SEO (server-safe)
+export type {
+  ISeoValues,
+  SeoClientProps,
+  AsteroidSeoConfig,
+  AsteroidOrganizationConfig,
+  AsteroidPageSeoOptions,
+  AsteroidOgImagePalette,
+  AsteroidOgImageParams,
+} from "./seo/seo.config";
+
+export {
+  applyTitleTemplate,
+  buildOgImageUrl,
+  buildPageSeoValues,
+  buildArticleSeoValues,
+  buildArticleListingSeoValues,
+  seoValuesToClientProps,
+} from "./seo/seo.builders";
+
+export {
+  buildSiteJsonLd,
+  buildArticleJsonLd,
+  buildCollectionJsonLd,
+  buildWebPageJsonLd,
+} from "./seo/jsonld";
+export type {
+  ArticleJsonLdType,
+  ArticleJsonLdProps,
+  CollectionJsonLdProps,
+  WebPageJsonLdProps,
+} from "./seo/jsonld";
+
+export { OgImageContent, parseOgImageSearchParams } from "./seo/ogImage";
+export type {
+  OgImageVariant,
+  OgImageContentParams,
+  ParsedOgImageParams,
+} from "./seo/ogImage";
