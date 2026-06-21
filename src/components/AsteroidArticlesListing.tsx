@@ -9,9 +9,9 @@ import type { AsteroidSeoConfig } from "../seo/seo.config";
 import { JsonLd, Seo } from "../seo/Seo";
 import { buildCollectionJsonLd } from "../seo/jsonld";
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 // Types
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 
 /** Minimal article post shape shared across Asteroid CMS apps. */
 export interface AsteroidArticlePost {
@@ -82,7 +82,7 @@ export interface AsteroidArticlesPostGridParams<
 > {
   posts: TPost[];
   group: AsteroidArticleCategoryGroup<TPost>;
-  /** Pre-built post cards — render as-is or wrap. */
+  /** Pre-built post cards - render as-is or wrap. */
   children: ReactNode;
 }
 
@@ -96,7 +96,7 @@ export interface AsteroidArticlesCategoryGroupParams<
   TPost extends AsteroidArticlePost = AsteroidArticlePost,
 > {
   group: AsteroidArticleCategoryGroup<TPost>;
-  /** Default heading + grid — use it, wrap it, or replace entirely. */
+  /** Default heading + grid - use it, wrap it, or replace entirely. */
   defaultContent: ReactNode;
 }
 
@@ -145,15 +145,15 @@ export interface AsteroidArticlesProps<
   /** Debounce delay for search in ms. Default: 800 */
   searchDebounceMs?: number;
 
-  /** Site SEO config — enables client-side meta tags in React and Next.js apps. */
+  /** Site SEO config - enables client-side meta tags in React and Next.js apps. */
   seo?: AsteroidSeoConfig;
 
-  // ── Static header slots (content only — no styling in AsteroidArticles) ──────
+  // Static header slots (content only - no styling in AsteroidArticles)
   eyebrow?: ReactNode;
   title?: ReactNode;
   description?: ReactNode;
 
-  // ── Render props (MUI DataGrid-style) ─────────────────────────────────────
+  // Render props (MUI DataGrid-style)
   /** Wrap the entire component output. */
   renderRoot?: (params: { children: ReactNode }) => ReactNode;
   /** Replace the default header layout (eyebrow + title + description + search). */
@@ -190,7 +190,7 @@ export interface AsteroidArticlesProps<
   renderJsonLd?: (params: AsteroidArticlesState<TPost>) => ReactNode;
 
   /**
-   * Escape hatch — receive full computed state and render everything yourself.
+   * Escape hatch - receive full computed state and render everything yourself.
    * When provided, structural render props above are ignored (slot render props
    * like `renderPostCard` are still used if you call them manually).
    */
@@ -202,9 +202,9 @@ export interface AsteroidArticlesProps<
   ) => AsteroidArticleCategoryGroup<TPost>[];
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 // Utilities
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 
 function useDebouncedValue<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -274,9 +274,9 @@ function splitFeaturedAndRest<TPost extends AsteroidArticlePost>(
   return { featured, rest };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 // State hook (headless usage)
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 
 export function useAsteroidArticlesState<
   TPost extends AsteroidArticlePost = AsteroidArticlePost,
@@ -344,9 +344,9 @@ export function useAsteroidArticlesState<
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 // AsteroidArticlesListing
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 
 export function AsteroidArticlesListing<
   TPost extends AsteroidArticlePost = AsteroidArticlePost,

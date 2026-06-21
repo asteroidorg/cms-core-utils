@@ -70,7 +70,7 @@ export function buildPageSeoValues(
   const description =
     options.description?.trim() ||
     config.defaultDescription ||
-    `${options.title} — ${config.siteName}.`;
+    `${options.title} - ${config.siteName}.`;
 
   return {
     title: applyTitleTemplate(config, options.title),

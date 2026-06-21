@@ -9,9 +9,9 @@ import type { AsteroidSeoConfig } from "../seo/seo.config";
 import { JsonLd, Seo } from "../seo/Seo";
 import { buildArticleJsonLd, type ArticleJsonLdType } from "../seo/jsonld";
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 // Types
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 
 export interface AsteroidArticlePagePost {
   slug: string;
@@ -52,17 +52,17 @@ export interface AsteroidArticlePageProps<
   /** Inject the app-specific CMS fetching hook. */
   useArticle: AsteroidArticlePageUseArticle<TPost>;
 
-  /** Site SEO config — enables client-side meta tags in React and Next.js apps. */
+  /** Site SEO config - enables client-side meta tags in React and Next.js apps. */
   seo?: AsteroidSeoConfig;
 
   /** schema.org Article subtype for the built-in JSON-LD. Default: "Article". */
   articleType?: ArticleJsonLdType;
 
-  // ── Static content slots (shown when provided) ─────────────────────────────
+  // Static content slots (shown when provided)
   /** "Back to article" link. */
   backLink?: ReactNode;
 
-  // ── Render props ───────────────────────────────────────────────────────────
+  // Render props
   /** Wrap the entire component output. */
   renderRoot?: (params: { children: ReactNode }) => ReactNode;
 
@@ -118,15 +118,15 @@ export interface AsteroidArticlePageProps<
   renderJsonLd?: (params: { post: TPost }) => ReactNode;
 
   /**
-   * Escape hatch — receive the full result and render everything yourself.
+   * Escape hatch - receive the full result and render everything yourself.
    * When provided, structural render props above are ignored.
    */
   children?: (state: AsteroidArticlePageUseArticleResult<TPost>) => ReactNode;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 // AsteroidArticlePage
-// ─────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 
 export function AsteroidArticlePage<
   TPost extends AsteroidArticlePagePost = AsteroidArticlePagePost,
