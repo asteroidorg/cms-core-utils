@@ -23,9 +23,11 @@ export async function generateSeoMetadata(
     publisher: SeoInfo.siteName,
     keywords: SeoInfo.keywords,
     category: SeoInfo.title,
-    manifest: SeoInfo.url,
-    robots: { index: true, follow: true },
-    authors: { name: SeoInfo.siteName, url: SeoInfo.url + "/humans.txt" },
+    ...(SeoInfo.manifestUrl ? { manifest: SeoInfo.manifestUrl } : {}),
+    robots: SeoInfo.noindex
+      ? { index: false, follow: true }
+      : { index: true, follow: true },
+    authors: { name: SeoInfo.siteName },
     referrer: "origin",
     abstract: SeoInfo.description,
     alternates: { canonical: SeoInfo.url },
@@ -108,12 +110,11 @@ export function SEOHeadComponent({ SeoInfo }: { SeoInfo: ISeoValues }) {
       {SeoInfo.twitter ? <meta name="twitter:site" content={SeoInfo.twitter} /> : null}
       {SeoInfo.image ? <meta name="twitter:image" content={SeoInfo.image} /> : null}
       <meta name="referrer" content="origin" />
-      <link rel="manifest" href={SeoInfo.url} crossOrigin="use-credentials" />
+      {SeoInfo.manifestUrl ? <link rel="manifest" href={SeoInfo.manifestUrl} crossOrigin="use-credentials" /> : null}
       <meta name="category" content={SeoInfo.title} />
-      <meta name="robots" content="index" />
+      <meta name="robots" content={SeoInfo.noindex ? "noindex" : "index"} />
       <meta name="author" content={SeoInfo.siteName} />
       <meta name="revisit-after" content="3 month" />
-      <link rel="author" href="humans.txt" />
     </Head>
   );
 }

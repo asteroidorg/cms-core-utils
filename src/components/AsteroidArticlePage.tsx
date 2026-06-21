@@ -58,6 +58,8 @@ export interface AsteroidArticlePageProps<
 
   /** schema.org Article subtype for the built-in JSON-LD. Default: "Article". */
   articleType?: ArticleJsonLdType;
+  /** Mark this page as `noindex` for search engines. */
+  noindex?: boolean;
 
   // Static content slots (shown when provided)
   /** "Back to article" link. */
@@ -155,6 +157,7 @@ export function AsteroidArticlePage<
     renderRelatedPosts,
     renderCTA,
     renderJsonLd,
+    noindex,
     children,
   } = props;
 
@@ -185,7 +188,9 @@ export function AsteroidArticlePage<
 
   // Success
   const seoValues =
-    seoConfig && article ? buildArticleSeoValues(article, seoConfig, slug) : null;
+    seoConfig && article
+      ? buildArticleSeoValues(article, seoConfig, slug, { noindex })
+      : null;
 
   const body = (
     <>

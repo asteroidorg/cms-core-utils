@@ -8,9 +8,13 @@ function setMeta(attr: "name" | "property", key: string, content: string) {
     `meta[${attr}="${key}"]`,
   );
   if (!element) {
+    if (!content) return;
     element = document.createElement("meta");
     element.setAttribute(attr, key);
     document.head.appendChild(element);
+  } else if (!content) {
+    element.remove();
+    return;
   }
   element.setAttribute("content", content);
 }
@@ -30,10 +34,15 @@ function setCanonical(url: string) {
 /** Render a JSON-LD <script>. Pass a built graph via `data`; renders nothing if absent. */
 export function JsonLd({ data }: { data?: object }) {
   if (!data) return null;
+  const html = JSON.stringify(data)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+      dangerouslySetInnerHTML={{ __html: html }}
     />
   );
 }
@@ -51,6 +60,7 @@ export function Seo({
   keywords,
   twitter,
   image,
+  noindex,
 }: SeoClientProps) {
   useEffect(() => {
     document.title = title;
@@ -60,19 +70,17 @@ export function Seo({
     setMeta("property", "og:title", title);
     setMeta("property", "og:description", description);
     setMeta("property", "og:url", url);
-    if (siteName) setMeta("property", "og:site_name", siteName);
-    if (keywords) setMeta("name", "keywords", keywords);
+    setMeta("property", "og:site_name", siteName || "");
+    setMeta("name", "keywords", keywords || "");
+    setMeta("name", "robots", noindex ? "noindex" : "index");
 
     setMeta("name", "twitter:card", image ? "summary_large_image" : "summary");
     setMeta("name", "twitter:title", title);
     setMeta("name", "twitter:description", description);
-    if (twitter) setMeta("name", "twitter:site", twitter);
-
-    if (image) {
-      setMeta("property", "og:image", image);
-      setMeta("name", "twitter:image", image);
-    }
-  }, [title, description, url, siteName, keywords, twitter, image]);
+    setMeta("name", "twitter:site", twitter || "");
+    setMeta("property", "og:image", image || "");
+    setMeta("name", "twitter:image", image || "");
+  }, [title, description, url, siteName, keywords, twitter, image, noindex]);
 
   return null;
 }

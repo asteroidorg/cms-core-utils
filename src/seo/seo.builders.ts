@@ -87,6 +87,8 @@ export function buildPageSeoValues(
         eyebrow: options.eyebrow,
         type: options.ogType === "article" ? "article" : "listing",
       }),
+    noindex: options.noindex ?? config.noindex,
+    manifestUrl: config.manifestUrl,
   };
 }
 
@@ -121,6 +123,7 @@ export function buildArticleSeoValues<TPost extends ArticleLike>(
   post: TPost,
   config: AsteroidSeoConfig,
   slug: string,
+  options?: { noindex?: boolean },
 ): ISeoValues {
   const articlePath = config.articlePath ?? "/blog";
   const url = `${config.baseUrl.replace(/\/$/, "")}${articlePath}/${slug}`;
@@ -138,13 +141,15 @@ export function buildArticleSeoValues<TPost extends ArticleLike>(
     url,
     keywords: config.defaultKeywords ?? post.title,
     image: resolveArticleImage(post, config),
+    noindex: options?.noindex ?? config.noindex,
+    manifestUrl: config.manifestUrl,
   };
 }
 
 /** SEO for an article collection / category listing (any content type). */
 export function buildArticleListingSeoValues(
   config: AsteroidSeoConfig,
-  options?: { categoryName?: string; categorySlug?: string },
+  options?: { categoryName?: string; categorySlug?: string; noindex?: boolean },
 ): ISeoValues {
   const articlePath = config.articlePath ?? "/blog";
   const base = config.baseUrl.replace(/\/$/, "");
@@ -180,6 +185,8 @@ export function buildArticleListingSeoValues(
       eyebrow: categoryName ? "Category" : label,
       type: "listing",
     }),
+    noindex: options?.noindex ?? config.noindex,
+    manifestUrl: config.manifestUrl,
   };
 }
 
@@ -192,5 +199,6 @@ export function seoValuesToClientProps(values: ISeoValues): SeoClientProps {
     keywords: values.keywords,
     twitter: values.twitter,
     image: values.image,
+    noindex: values.noindex,
   };
 }

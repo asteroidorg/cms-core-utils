@@ -147,6 +147,8 @@ export interface AsteroidArticlesProps<
 
   /** Site SEO config - enables client-side meta tags in React and Next.js apps. */
   seo?: AsteroidSeoConfig;
+  /** Mark this page as `noindex` for search engines. */
+  noindex?: boolean;
 
   // Static header slots (content only - no styling in AsteroidArticles)
   eyebrow?: ReactNode;
@@ -369,6 +371,7 @@ export function AsteroidArticlesListing<
     renderEmpty,
     renderContent,
     renderJsonLd,
+    noindex,
     children,
   } = props;
 
@@ -378,12 +381,17 @@ export function AsteroidArticlesListing<
     ? state.posts[0]?.category?.name?.trim()
     : undefined;
 
+  if (children) {
+    return <>{children(state)}</>;
+  }
+
   const seoNode = seo ? (
     <Seo
       {...seoValuesToClientProps(
         buildArticleListingSeoValues(seo, {
           categoryName,
           categorySlug,
+          noindex,
         }),
       )}
     />
@@ -393,7 +401,7 @@ export function AsteroidArticlesListing<
     ? (renderJsonLd?.(state) ?? (
         <JsonLd
           data={buildCollectionJsonLd({
-            name: categoryName || `${seo.siteName} Article`,
+            name: categoryName || `${seo.siteName} ${seo.contentLabel ?? "Articles"}`,
             description: seo.defaultDescription || "",
             url: `${(seo.baseUrl || "").replace(/\/$/, "")}${
               seo.articlePath ?? "/blog"
@@ -403,10 +411,6 @@ export function AsteroidArticlesListing<
         />
       ))
     : null;
-
-  if (children) {
-    return <>{children(state)}</>;
-  }
 
   const handleSearchSubmit = (event: React.FormEvent) => {
     event.preventDefault();

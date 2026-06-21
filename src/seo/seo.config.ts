@@ -8,6 +8,8 @@ export interface ISeoValues {
   url: string;
   keywords: string;
   image?: string;
+  noindex?: boolean;
+  manifestUrl?: string;
 }
 
 export type SeoClientProps = {
@@ -18,6 +20,7 @@ export type SeoClientProps = {
   keywords?: string;
   twitter?: string;
   image?: string;
+  noindex?: boolean;
 };
 
 /** Theme colors used when generating dynamic OG images. */
@@ -50,6 +53,8 @@ export interface AsteroidPageSeoOptions {
   eyebrow?: string;
   /** Open Graph object type. Default: `website`. */
   ogType?: "website" | "article";
+  /** Mark the page as `noindex` for search engines. */
+  noindex?: boolean;
 }
 
 /** Site-level identity used to build the Organization/WebSite JSON-LD graph. */
@@ -95,4 +100,8 @@ export interface AsteroidSeoConfig {
   extraJsonLdNodes?: object[];
   /** CMS base URL for resolving featured-image URLs. Required server-side for featured images. */
   cmsUrl?: string;
+  /** URL to a PWA manifest.json. When set, a `<link rel="manifest">` is emitted. */
+  manifestUrl?: string;
+  /** Site-wide default robots policy. Per-page overrides are available on builder options. */
+  noindex?: boolean;
 }
