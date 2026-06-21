@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { useContext, type ReactNode } from "react";
 import {
   seoValuesToClientProps,
   buildArticleSeoValues,
@@ -8,6 +8,7 @@ import {
 import type { AsteroidSeoConfig } from "../seo/seo.config";
 import { JsonLd, Seo } from "../seo/Seo";
 import { buildArticleJsonLd, type ArticleJsonLdType } from "../seo/jsonld";
+import { AsteroidCMSContext } from "../provider/context";
 
 // ----------------------------------------------------------------------------
 // Types
@@ -158,6 +159,11 @@ export function AsteroidArticlePage<
   } = props;
 
   const { data: article, loading, error } = useArticle(slug);
+  const cmsConfig = useContext(AsteroidCMSContext);
+  const seoConfig =
+    seo && !seo.cmsUrl && cmsConfig?.cmsUrl
+      ? { ...seo, cmsUrl: cmsConfig.cmsUrl }
+      : seo;
 
   // Escape hatch
   if (children) {
@@ -178,25 +184,26 @@ export function AsteroidArticlePage<
   }
 
   // Success
-  const seoValues = seo && article ? buildArticleSeoValues(article, seo, slug) : null;
+  const seoValues =
+    seoConfig && article ? buildArticleSeoValues(article, seoConfig, slug) : null;
 
   const body = (
     <>
       {seoValues ? <Seo {...seoValuesToClientProps(seoValues)} /> : null}
-      {seo && article
+      {seoConfig && article
         ? (renderJsonLd?.({ post: article }) ?? (
             <JsonLd
               data={buildArticleJsonLd({
                 title: article.title,
                 description:
-                  article.description || seo.defaultDescription || "",
-                url: `${(seo.baseUrl || "").replace(/\/$/, "")}${
-                  seo.articlePath ?? "/blog"
+                  article.description || seoConfig.defaultDescription || "",
+                url: `${(seoConfig.baseUrl || "").replace(/\/$/, "")}${
+                  seoConfig.articlePath ?? "/blog"
                 }/${slug}`,
-                siteName: seo.siteName,
-                siteUrl: (seo.baseUrl || "").replace(/\/$/, ""),
+                siteName: seoConfig.siteName,
+                siteUrl: (seoConfig.baseUrl || "").replace(/\/$/, ""),
                 articleType,
-                image: article.featured_image || undefined,
+                image: seoValues?.image,
                 authorName: article.author?.name,
                 publishedTime: article.published_date || undefined,
                 tags: article.tags
