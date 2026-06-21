@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.8] - 2026-06-21
+
+### Added
+
+- SEO types, metadata builders, and JSON-LD utilities
+- OG image content component and search param parser
+- Client-side `Seo` and `JsonLd` components
+- Next.js SEO metadata generators and head component
+- `AsteroidArticlePage` and `AsteroidArticlesListing` page components
+- `@asteroidcms/core-utils/next` subpath export with optional Next.js peer dependency
+- SEO and page component documentation
+
 ## [0.1.7] - 2026-05-28
 
 ### Changed
@@ -57,6 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `RichTextContent` component for rendering rich-text blocks
 - `getContentReadTime` utility for estimating read time
 
+[0.1.8]: https://github.com/asteroidorg/cms-core-utils/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/asteroidorg/cms-core-utils/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/asteroidorg/cms-core-utils/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/asteroidorg/cms-core-utils/compare/v0.1.4...v0.1.5
