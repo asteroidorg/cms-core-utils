@@ -48,4 +48,12 @@ export default defineConfig([
     clean: false,
     external: [...shared.external, "next"],
   },
+  {
+    ...shared,
+    entry: { server: "src/server.ts" },
+    clean: false,
+    // `next` and the package's own client subpath stay external so the
+    // client island keeps its own "use client" module boundary.
+    external: [...shared.external, "next", "server-only", "@asteroidcms/core-utils/client"],
+  },
 ]);
