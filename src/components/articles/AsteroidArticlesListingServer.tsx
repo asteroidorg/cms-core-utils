@@ -1,12 +1,7 @@
 // src/components/articles/AsteroidArticlesListingServer.tsx
 import { type ReactNode } from "react";
 import { ArticleSearchBox, type ArticleSearchBoxProps } from "@asteroidcms/core-utils/client";
-import {
-  buildArticleListingSeoValues,
-  seoValuesToClientProps,
-} from "../../seo/seo.builders";
 import { buildCollectionJsonLd } from "../../seo/jsonld";
-import { Seo } from "../../seo/Seo";
 import { createImageResolver } from "../../utils/cmsImage";
 import { fetchArticles, type ArticleSource } from "../../server/defineArticleSource";
 import { buildArticlesViewState } from "./articles.state";
@@ -72,14 +67,6 @@ export async function AsteroidArticlesListingServer<
   const cmsImage = createImageResolver({ cmsUrl: source.seo.cmsUrl ?? source.client.cmsUrl });
   const categoryName = categorySlug ? state.posts[0]?.category?.name?.trim() : undefined;
 
-  const seoNode = (
-    <Seo
-      {...seoValuesToClientProps(
-        buildArticleListingSeoValues(source.seo, { categoryName, categorySlug, noindex }),
-      )}
-    />
-  );
-
   const collection = buildCollectionJsonLd({
     name: categoryName || `${source.seo.siteName} ${source.seo.contentLabel ?? "Articles"}`,
     description: source.seo.defaultDescription || "",
@@ -110,7 +97,7 @@ export async function AsteroidArticlesListingServer<
         error,
         cmsImage,
         searchNode,
-        seoNode,
+        seoNode: null,
         jsonLdNode,
         renderProps: renderProps as ArticlesListingRenderProps<TPost>,
       })}

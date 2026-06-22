@@ -37,11 +37,11 @@ Do not use both `generateMetadata` and `<Seo>` for the same route. They emit the
 
 The two sets of article components use different SEO strategies:
 
-- **Server components** (`AsteroidArticlesListingServer`, `AsteroidArticlePageServer`): emit JSON-LD via a `<script type="application/ld+json">` element rendered in the RSC payload, and produce `Metadata` objects via `generateListingMetadata` / `generateArticleMetadata` that Next.js merges into `<head>`. This is the right choice for Next.js App Router routes where you control `generateMetadata`.
+- **Server components** (`AsteroidArticlesListingServer`, `AsteroidArticlePageServer`): emit ONLY JSON-LD via a `<script type="application/ld+json">` element in the RSC payload. They do NOT inject `<title>`, canonical, or Open Graph meta tags themselves. To set those tags on a Next.js App Router route, export `generateMetadata` built from `generateListingMetadata` or `generateArticleMetadata` at the page level. This is the right choice for App Router routes where you control `generateMetadata`.
 
 - **Client components** (`AsteroidArticlesListing`, `AsteroidArticlePage`): emit `<Seo>` and `<JsonLd>` into the document head via the React client runtime. Use these for Vite, CRA, or Pages Router apps where server-side metadata generation is not available.
 
-Pick one approach per route. Do not render `AsteroidArticlePageServer` (which writes metadata via `generateMetadata`) and also call `<Seo>` inside the same route segment -- they would produce duplicate `<title>` and Open Graph tags.
+Pick one head strategy per route. On a Next.js App Router route, export `generateMetadata` for the document head and let the server component handle JSON-LD. Do not also call `<Seo>` on the same route -- it would produce duplicate `<title>` and Open Graph tags via a different runtime.
 
 ---
 

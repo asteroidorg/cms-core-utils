@@ -1,8 +1,7 @@
 // src/components/articles/AsteroidArticlePageServer.tsx
 import { type ReactNode } from "react";
-import { buildArticleSeoValues, seoValuesToClientProps } from "../../seo/seo.builders";
+import { buildArticleSeoValues } from "../../seo/seo.builders";
 import { buildArticleJsonLd, type ArticleJsonLdType } from "../../seo/jsonld";
-import { Seo } from "../../seo/Seo";
 import { createImageResolver } from "../../utils/cmsImage";
 import {
   fetchArticle,
@@ -41,7 +40,6 @@ export async function AsteroidArticlePageServer<
   const type = articleType ?? source.articleType;
 
   const seoValues = buildArticleSeoValues(article, source.seo, slug, { noindex });
-  const seoNode = <Seo {...seoValuesToClientProps(seoValues)} />;
 
   const articleLd = buildArticleJsonLd({
     title: article.title,
@@ -67,7 +65,7 @@ export async function AsteroidArticlePageServer<
         post: article,
         cmsImage,
         relatedPosts,
-        seoNode,
+        seoNode: null,
         jsonLdNode,
         renderProps: bodyRenderProps as ArticleBodyRenderProps<TDetail>,
       })}
