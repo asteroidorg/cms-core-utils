@@ -14,7 +14,11 @@
     "declaration": true,
     "declarationMap": true,
     "isolatedModules": true,
-    "noEmit": true
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@asteroidcms/core-utils/client": ["./src/client.ts"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
