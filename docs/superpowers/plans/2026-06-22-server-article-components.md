@@ -897,7 +897,7 @@ git commit -m "feat(articles): add shared article-body renderer with relatedPost
 // src/components/articles/AsteroidArticlesListing.tsx
 "use client";
 
-import { useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   buildArticleListingSeoValues,
   seoValuesToClientProps,
@@ -905,7 +905,6 @@ import {
 import type { AsteroidSeoConfig } from "../../seo/seo.config";
 import { JsonLd, Seo } from "../../seo/Seo";
 import { buildCollectionJsonLd } from "../../seo/jsonld";
-import { AsteroidCMSContext } from "../../provider/context";
 import { useCmsImage } from "../../utils/cmsImage";
 import { buildArticlesViewState } from "./articles.state";
 import { renderArticlesListingBody, type ArticlesListingRenderProps } from "./articles.view";
@@ -938,10 +937,13 @@ export type AsteroidArticlesUsePosts<
 export interface AsteroidArticlesState<
   TPost extends AsteroidArticlePost = AsteroidArticlePost,
 > extends ArticlesViewState<TPost> {
+  // `searchQuery` (inherited) is the effective, debounced+trimmed query used
+  // for grouping and empty-state messages.
   loading: boolean;
   error: unknown;
   hasError: boolean;
-  debouncedSearchQuery: string;
+  /** Raw, un-debounced input value. Bind your search box to this. */
+  inputValue: string;
   setSearchQuery: (value: string) => void;
 }
 
@@ -976,8 +978,8 @@ export function useAsteroidArticlesState<
   "usePosts" | "categorySlug" | "articleSlug" | "searchDebounceMs" | "groupPostsByCategory"
 >): AsteroidArticlesState<TPost> {
   const { usePosts, categorySlug, articleSlug, searchDebounceMs = 800, groupPostsByCategory } = props;
-  const [searchQuery, setSearchQuery] = useState("");
-  const debouncedSearchQuery = useDebouncedValue(searchQuery, searchDebounceMs);
+  const [inputValue, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebouncedValue(inputValue, searchDebounceMs);
   const { posts: rawPosts, loading, error } = usePosts(debouncedSearchQuery);
 
   const view = useMemo(
@@ -996,7 +998,7 @@ export function useAsteroidArticlesState<
     loading,
     error,
     hasError: Boolean(error),
-    debouncedSearchQuery: view.searchQuery,
+    inputValue,
     setSearchQuery,
   };
 }
@@ -1006,7 +1008,6 @@ export function AsteroidArticlesListing<
 >(props: AsteroidArticlesProps<TPost>) {
   const { seo, categorySlug, noindex, renderSearch, renderJsonLd, children, ...renderProps } = props;
   const state = useAsteroidArticlesState(props);
-  const cmsConfig = useContext(AsteroidCMSContext);
   const cmsImage = useCmsImage();
 
   if (children) return <>{children(state)}</>;
@@ -1038,7 +1039,7 @@ export function AsteroidArticlesListing<
 
   const searchNode = renderSearch
     ? renderSearch({
-        value: state.searchQuery,
+        value: state.inputValue,
         onChange: state.setSearchQuery,
         onSubmit: (event) => event.preventDefault(),
       })
@@ -1062,7 +1063,7 @@ export function AsteroidArticlesListing<
 }
 ```
 
-Note: `state.searchQuery` is the debounced/effective query; the client search input keeps its own raw value in the consumer's `renderSearch`. To preserve the previous behavior where the input shows the raw typed value, the consumer reads `value` from `renderSearch` params, which here is the effective query. If raw-input echo is required, keep the raw value local in the consumer. (This matches the existing brass `renderSearch` which is controlled by these params.)
+Note: `renderSearch` receives `value: state.inputValue` (the raw, un-debounced typed value) so the search box echoes keystrokes immediately, while `state.searchQuery` (effective, debounced+trimmed) drives grouping and the empty-state messages inside `renderArticlesListingBody`. This matches the original behavior where the input showed the raw value and the no-results label used the debounced query.
 
 - [ ] **Step 2: Delete the old client listing file**
 
