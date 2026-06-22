@@ -59,3 +59,16 @@ export type {
   AsteroidArticlePost,
   AsteroidArticleCategoryGroup,
 } from "./components/articles/articles.types";
+export type {
+  ArticleImageResolver,
+  AsteroidArticlesSearchParams,
+  AsteroidArticlesHeaderParams,
+  AsteroidArticlesFeaturedCardParams,
+  AsteroidArticlesPostCardParams,
+  AsteroidArticlesPostGridParams,
+  AsteroidArticlesCategoryHeadingParams,
+  AsteroidArticlesCategoryGroupParams,
+  AsteroidArticlesEmptyParams,
+  AsteroidArticlesEmptyReason,
+  AsteroidArticlesContentParams,
+} from "./components/articles/articles.types";
