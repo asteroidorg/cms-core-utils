@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `@asteroidcms/core-utils/server` entry: `AsteroidArticlesListingServer`,
+  `AsteroidArticlePageServer`, `defineArticleSource`, `createCmsServerClient`,
+  and source-aware `generateListingMetadata` / `generateArticleMetadata`.
+  Also exports `fetchArticles`, `fetchArticle`, `fetchRelatedArticles`, and
+  `buildSearchConditions` for custom fetch logic.
+  Server components fetch on the server so the CMS API key (`CMS_API_KEY`,
+  not `NEXT_PUBLIC_*`) never reaches the browser; article search is driven by
+  URL `searchParams` via `ArticleSearchBox`.
+
+### Changed
+
+- Article render-prop params now include an injected `cmsImage(idOrUrl)`
+  resolver. Render props should use it instead of calling `useCmsImage()`,
+  so the same render functions work in both client and server components.
+
 ## [0.1.8] - 2026-06-21
 
 ### Added
