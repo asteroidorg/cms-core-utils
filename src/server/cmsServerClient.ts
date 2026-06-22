@@ -1,7 +1,14 @@
 // src/server/cmsServerClient.ts
 import type { ApolloClient } from "@apollo/client";
-import { cache } from "react";
+import * as React from "react";
 import { createApolloClient, resolveConfig } from "../apollo/createApolloClient";
+
+// React.cache exists in React 19 / RSC (and Next's bundled React); it is absent
+// in stable React 18. Fall back to an identity wrapper so the factory still works
+// (without per-request dedup) outside an RSC runtime.
+type CacheFn = <A extends unknown[], R>(fn: (...args: A) => R) => (...args: A) => R;
+const reactCache: CacheFn =
+  (React as unknown as { cache?: CacheFn }).cache ?? ((fn) => fn);
 
 export interface CmsServerClientConfig {
   cmsUrl: string;
@@ -53,5 +60,5 @@ export function createCmsServerClient(config: CmsServerClientConfig): CmsServerC
           : {}),
       }));
 
-  return { getClient: cache(factory), cmsUrl: resolved.cmsUrl };
+  return { getClient: reactCache(factory), cmsUrl: resolved.cmsUrl };
 }

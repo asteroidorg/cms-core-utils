@@ -1,5 +1,21 @@
 // src/server/cmsServerClient.test.ts
-import { describe, expect, it, vi } from "vitest";
+import { vi } from "vitest";
+vi.mock("react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react")>();
+  return {
+    ...actual,
+    cache: <T extends (...args: never[]) => unknown>(fn: T): T => {
+      let computed = false;
+      let value: unknown;
+      return ((...args: Parameters<T>) => {
+        if (!computed) { computed = true; value = fn(...args); }
+        return value;
+      }) as T;
+    },
+  };
+});
+
+import { describe, expect, it } from "vitest";
 import { createCmsServerClient } from "./cmsServerClient";
 
 describe("createCmsServerClient", () => {
