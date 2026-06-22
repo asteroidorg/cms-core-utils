@@ -83,7 +83,7 @@ export async function fetchArticles<
     schema_slug: source.schemaSlug,
     select: source.listSelect,
     status: source.status,
-    ...(opts.limit ? { limit: opts.limit } : {}),
+    ...(opts.limit !== undefined ? { limit: opts.limit } : {}),
     ...(opts.categorySlug ? { filter: { category: opts.categorySlug } } : {}),
     ...(search ? { search } : {}),
   });
