@@ -93,6 +93,10 @@ export async function AsteroidArticlesListingServer<
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collection) }} />
     );
 
+  // On the SERVER, search is URL-driven: the default ArticleSearchBox (or custom client island)
+  // writes the searchParamKey query param, and the page re-renders from searchParams.
+  // A custom renderSearch should render its own client island to update the URL param;
+  // the onChange/onSubmit stubs below are inert placeholders kept only for API shape compatibility.
   const searchNode = renderSearch
     ? renderSearch({ value: searchQuery, onChange: () => {}, onSubmit: (e) => e.preventDefault() })
     : <ArticleSearchBox paramKey={searchParamKey} {...searchBoxProps} />;
