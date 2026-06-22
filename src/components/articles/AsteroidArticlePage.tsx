@@ -1,4 +1,3 @@
-// src/components/articles/AsteroidArticlePage.tsx
 "use client";
 
 import { useContext, type ReactNode } from "react";
