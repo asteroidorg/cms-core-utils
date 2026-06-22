@@ -73,3 +73,6 @@ export type {
   AsteroidArticlesEmptyReason,
   AsteroidArticlesContentParams,
 } from "./components/articles/articles.types";
+
+export { ArticleSearchBox } from "./components/articles/ArticleSearchBox";
+export type { ArticleSearchBoxProps } from "./components/articles/ArticleSearchBox";
