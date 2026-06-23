@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { renderArticlesListingBody } from "./articles.view";
 import { buildArticlesViewState } from "./articles.state";
-import type { AsteroidArticlePost } from "./articles.types";
+import type { ArticleImageResolver, AsteroidArticleCategoryGroup, AsteroidArticlePost } from "./articles.types";
 
 const posts: AsteroidArticlePost[] = [
   { slug: "a", title: "Alpha", featured: true, category: { slug: "news", name: "News" } },
@@ -39,5 +39,30 @@ describe("renderArticlesListingBody", () => {
   });
   it("renders the skeleton while loading", () => {
     expect(render(true)).toContain("data-testid=\"skeleton\"");
+  });
+});
+
+describe("renderArticlesListingBody – empty search", () => {
+  it("reports reason no-results when searching with zero results", () => {
+    const state = buildArticlesViewState([], { searchQuery: "term" });
+    const html = renderToStaticMarkup(
+      <>{renderArticlesListingBody({
+        state,
+        loading: false,
+        hasError: false,
+        error: undefined,
+        cmsImage: (x) => x ?? "",
+        searchNode: null,
+        seoNode: null,
+        jsonLdNode: null,
+        renderProps: {
+          renderPostCard: ({ post }: { post: AsteroidArticlePost; index: number; group: AsteroidArticleCategoryGroup; cmsImage: ArticleImageResolver }) => <article>{post.title}</article>,
+          renderEmpty: ({ reason, searchQuery }) => (
+            <div>EMPTY:{reason}:{searchQuery}</div>
+          ),
+        },
+      })}</>,
+    );
+    expect(html).toContain("EMPTY:no-results:term");
   });
 });

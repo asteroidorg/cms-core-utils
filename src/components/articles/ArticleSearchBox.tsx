@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 export interface ArticleSearchBoxProps {
@@ -30,10 +30,12 @@ export function ArticleSearchBox({
   const searchParams = useSearchParams();
   const initial = searchParams.get(paramKey) ?? "";
   const [value, setValue] = useState(initial);
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      const params = new URLSearchParams(Array.from(searchParams.entries()));
+      const params = new URLSearchParams(Array.from(searchParamsRef.current.entries()));
       const trimmed = value.trim();
       if (trimmed) params.set(paramKey, trimmed);
       else params.delete(paramKey);
@@ -55,6 +57,7 @@ export function ArticleSearchBox({
         type="search"
         value={value}
         placeholder={placeholder}
+        aria-label={placeholder}
         onChange={(event) => setValue(event.target.value)}
       />
     </form>

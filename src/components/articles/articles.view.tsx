@@ -140,7 +140,7 @@ export function renderArticlesListingBody<
       {loading ? renderSkeleton?.() : null}
       {!loading && (hasError || state.isEmpty)
         ? renderEmpty?.({
-            reason: hasError ? "error" : "no-posts",
+            reason: hasError ? "error" : state.isSearching ? "no-results" : "no-posts",
             searchQuery: state.searchQuery,
             error,
           })

@@ -7,6 +7,7 @@ import {
 import type { ISeoValues } from "../seo/seo.config";
 import { fetchArticle, type ArticleSource } from "./defineArticleSource";
 import type { AsteroidArticlePagePost } from "../components/articles/article.view";
+import type { AsteroidArticlePost } from "../components/articles/articles.types";
 
 export function seoValuesToMetadata(
   v: ISeoValues,
@@ -51,7 +52,7 @@ export async function generateListingMetadata(
 }
 
 export async function generateArticleMetadata(
-  source: ArticleSource<AsteroidArticlePagePost>,
+  source: ArticleSource<AsteroidArticlePost, AsteroidArticlePagePost>,
   paramsOrSlug: string | { slug: string } | Promise<{ slug: string }>,
 ): Promise<Metadata> {
   const resolved = await paramsOrSlug;
