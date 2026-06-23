@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-23
+
 ### Added
 
 - `@asteroidcms/core-utils/server` entry: `AsteroidArticlesListingServer`,
@@ -88,6 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `RichTextContent` component for rendering rich-text blocks
 - `getContentReadTime` utility for estimating read time
 
+[0.2.0]: https://github.com/asteroidorg/cms-core-utils/compare/v0.1.8...v0.2.0
 [0.1.8]: https://github.com/asteroidorg/cms-core-utils/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/asteroidorg/cms-core-utils/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/asteroidorg/cms-core-utils/compare/v0.1.5...v0.1.6
