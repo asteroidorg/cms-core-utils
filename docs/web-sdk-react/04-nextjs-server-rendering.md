@@ -132,6 +132,71 @@ export async function generateMetadata({
 
 ---
 
+## Source-driven server components
+
+`@asteroidcms/core-utils/server` ships higher-level abstractions built on top of `fetchCmsContent`. Define a typed "source" once and the listing, article, and metadata functions all share the same fetch config, SEO config, and field selection.
+
+### Define a source
+
+```ts
+// cms/blogSource.ts
+import { createCmsServerClient, defineArticleSource } from "@asteroidcms/core-utils/server";
+import { blogSeo } from "@/configs/seo-config";
+
+export const cmsServerClient = createCmsServerClient({
+  cmsUrl: process.env.CMS_API_BASE_URL!,
+  apiKey: process.env.CMS_API_KEY!, // server-only, NOT NEXT_PUBLIC
+  revalidate: 300,
+  tags: ["cms:blog"],
+});
+
+export const blogSource = defineArticleSource({
+  client: cmsServerClient,
+  schemaSlug: "blog",
+  listSelect: ["slug", "title", "description", "featured", "featured_image", "published_date",
+    { field: "category", single: true, select: ["slug", "name"] }],
+  detailSelect: ["slug", "title", "description", "content", "tags", "featured_image", "published_date",
+    { field: "category", single: true, select: ["slug", "name"] },
+    { field: "author", single: true, select: ["name", "bio"] }],
+  seo: blogSeo,
+  articleType: "BlogPosting",
+});
+```
+
+`createCmsServerClient` wraps the Apollo factory with React `cache()` for per-request deduplication when running under React Server Components (React 19 / Next.js's bundled React). Under stable React 18 it degrades gracefully -- the factory is called without dedup. The API key is bound at the server module boundary and never reaches the browser.
+
+### Listing page with searchParams
+
+```tsx
+// app/blog/page.tsx
+import { AsteroidArticlesListingServer } from "@asteroidcms/core-utils/server";
+import { blogSource } from "@/cms/blogSource";
+
+export default async function BlogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const { q } = await searchParams;
+  return (
+    <AsteroidArticlesListingServer
+      source={blogSource}
+      searchQuery={q}
+      renderPostCard={({ post }) => (
+        <a href={`/blog/${post.slug}`}>
+          <h2>{post.title}</h2>
+          <p>{post.description}</p>
+        </a>
+      )}
+    />
+  );
+}
+```
+
+The search param is read once on the server; the built-in `ArticleSearchBox` (a `"use client"` island) updates the URL, triggering a new server render. See [Server article components](/docs/web-sdk-react/server-article-components) for the full guide.
+
+---
+
 ## Writing content from the server
 
 `cmsMutate` is the server-side counterpart to `useCmsMutate`. Use it in Route Handlers, webhooks, or any server context that needs to create, update, or delete entries.

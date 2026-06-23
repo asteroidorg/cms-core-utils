@@ -15,10 +15,11 @@ The SEO surface is content-type agnostic. "Article" means any entry-shaped conte
 | Entry | Import from | What belongs here |
 | --- | --- | --- |
 | Server-safe root | `@asteroidcms/core-utils` | Types, SEO value builders, JSON-LD builders, `OgImageContent`, `parseOgImageSearchParams` |
-| Client entry | `@asteroidcms/core-utils/client` | `<Seo>`, `<JsonLd>`, `<AsteroidArticlePage>`, `<AsteroidArticlesListing>` |
+| Client entry | `@asteroidcms/core-utils/client` | `<Seo>`, `<JsonLd>`, `<AsteroidArticlePage>`, `<AsteroidArticlesListing>`, `ArticleSearchBox` |
 | Next.js entry | `@asteroidcms/core-utils/next` | `generateSeoMetadata`, `generatePageSeoMetadata`, `generateArticleSeoMetadata`, `generateArticleListingSeoMetadata`, `SEOHeadComponent` |
+| Server entry | `@asteroidcms/core-utils/server` | `createCmsServerClient`, `defineArticleSource`, `fetchArticles`, `fetchArticle`, `fetchRelatedArticles`, `AsteroidArticlesListingServer`, `AsteroidArticlePageServer`, `generateListingMetadata`, `generateArticleMetadata` |
 
-The root entry has no DOM, hooks, or `next` import. The client entry has `"use client"`. The Next.js entry imports Next types/components and should only be used in Next apps.
+The root entry has no DOM, hooks, or `next` import. The client entry has `"use client"`. The Next.js entry imports Next types/components and should only be used in Next apps. The server entry has `import "server-only"` -- importing it from a client module fails at build time.
 
 ---
 
@@ -26,11 +27,21 @@ The root entry has no DOM, hooks, or `next` import. The client entry has `"use c
 
 Use one head strategy per page:
 
-1. Next.js App Router server route: use `generate*SeoMetadata` from `@asteroidcms/core-utils/next`.
+1. Next.js App Router server route: use `generate*SeoMetadata` from `@asteroidcms/core-utils/next`, or the source-aware `generateListingMetadata` / `generateArticleMetadata` from `@asteroidcms/core-utils/server`.
 2. Client-only route, Vite, CRA, or another SPA: use `<Seo>` from `@asteroidcms/core-utils/client`.
 3. JSON-LD can be emitted with `<JsonLd data={...} />` in client routes, or by rendering your own `<script type="application/ld+json">` from a server component.
 
 Do not use both `generateMetadata` and `<Seo>` for the same route. They emit the same title, canonical URL, and social metadata through different runtimes.
+
+### Server vs client article components
+
+The two sets of article components use different SEO strategies:
+
+- **Server components** (`AsteroidArticlesListingServer`, `AsteroidArticlePageServer`): emit ONLY JSON-LD via a `<script type="application/ld+json">` element in the RSC payload. They do NOT inject `<title>`, canonical, or Open Graph meta tags themselves. To set those tags on a Next.js App Router route, export `generateMetadata` built from `generateListingMetadata` or `generateArticleMetadata` at the page level. This is the right choice for App Router routes where you control `generateMetadata`.
+
+- **Client components** (`AsteroidArticlesListing`, `AsteroidArticlePage`): emit `<Seo>` and `<JsonLd>` into the document head via the React client runtime. Use these for Vite, CRA, or Pages Router apps where server-side metadata generation is not available.
+
+Pick one head strategy per route. On a Next.js App Router route, export `generateMetadata` for the document head and let the server component handle JSON-LD. Do not also call `<Seo>` on the same route -- it would produce duplicate `<title>` and Open Graph tags via a different runtime.
 
 ---
 
@@ -303,6 +314,9 @@ export function NewsIndexRoute() {
 ---
 
 ## Component prop reference
+
+> **cmsImage in render props (server components)**
+> Server components inject a `cmsImage` resolver directly into each render-prop parameter: `renderHeader`, `renderContent`, `renderRelatedPosts`, and others all receive `{ post, cmsImage }`. Use this injected resolver to convert CMS asset IDs to absolute URLs. Do not call `useCmsImage()` inside these callbacks -- `useCmsImage()` is a client hook and is not available in server components.
 
 `AsteroidArticlePageProps<TPost>` handles one fetched article:
 

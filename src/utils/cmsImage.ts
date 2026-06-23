@@ -20,3 +20,20 @@ export function useCmsImage(): (id?: string) => string {
   const { cmsUrl, mediaPath } = useAsteroidCMSConfig();
   return (id?: string) => cmsImage(id, { cmsUrl, mediaPath });
 }
+
+/**
+ * Build a runtime-agnostic image resolver. Passes absolute http(s) URLs
+ * through unchanged; otherwise resolves a CMS asset id to a canonical media
+ * URL. Returns "" when input is empty or no `cmsUrl` is configured.
+ */
+export function createImageResolver(options: {
+  cmsUrl?: string;
+  mediaPath?: string;
+}): (idOrUrl?: string) => string {
+  return (idOrUrl?: string) => {
+    if (!idOrUrl) return "";
+    if (/^https?:\/\//i.test(idOrUrl)) return idOrUrl;
+    if (!options.cmsUrl) return "";
+    return cmsImage(idOrUrl, { cmsUrl: options.cmsUrl, mediaPath: options.mediaPath });
+  };
+}

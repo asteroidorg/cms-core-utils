@@ -30,6 +30,17 @@ npm install @apollo/client-integration-nextjs # for nextjs (optional)
 
 ---
 
+## Entry points
+
+| Entry point                          | What it exports                                                                                                                                                                                                                                                                 |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@asteroidcms/core-utils`            | Core utilities: `fetchCmsContent`, `cmsMutate`, `buildCmsQuery`, `buildCmsMutation`, `cmsImage`, `parseRichText`, `getContentReadTime`, `extractHeadingsFromHtml`, `createApolloClient`, `AsteroidCMSProvider`.                                                                  |
+| `@asteroidcms/core-utils/client`     | Client components and hooks (browser / React): `AsteroidCMSProvider`, `useCmsContent`, `useCmsMutate`, `useCmsImage`, `RichTextContent`, `extractHeadingsFromElement`.                                                                                                          |
+| `@asteroidcms/core-utils/next`       | Next.js metadata helpers and SEO head component. Optional peer dep on `next`.                                                                                                                                                                                                   |
+| `@asteroidcms/core-utils/server`     | Server components: `AsteroidArticlesListingServer`, `AsteroidArticlePageServer`, `defineArticleSource`, `createCmsServerClient`, `generateListingMetadata`, `generateArticleMetadata`. Also exports `fetchArticles`, `fetchArticle`, `fetchRelatedArticles`, `buildSearchConditions`. Server-only -- the CMS API key never reaches the browser. |
+
+---
+
 ## Quick start
 
 Wrap your app once:
@@ -364,6 +375,8 @@ import { cmsImage } from "@asteroidcms/core-utils";
 cmsImage(id, { cmsUrl: "https://cms-api.example.com" });
 ```
 
+**Note:** Article render-prop callbacks (`renderPostCard` for listing, `renderRelatedPosts` for related posts, `renderContent`/`renderHeader` for article body) in both `AsteroidArticlesListing` (client) and `AsteroidArticlesListingServer` / `AsteroidArticlePageServer` (server) receive an injected `cmsImage(idOrUrl)` resolver. Prefer it over calling `useCmsImage()` directly so the same render function works in client and server components. A server equivalent for article listing and article page exists under `@asteroidcms/core-utils/server`.
+
 ---
 
 ## `getContentReadTime`
@@ -472,6 +485,160 @@ const client = createApolloClient({
   apiKey: "...",
 });
 ```
+
+---
+
+## `@asteroidcms/core-utils/server`
+
+Server-only entry. Guarded by `server-only` so it fails loudly if imported in a client module.
+
+See [docs/web-sdk-react/13-server-article-components.md](./docs/web-sdk-react/13-server-article-components.md) for the full guide.
+
+### `createCmsServerClient` + `defineArticleSource`
+
+Define a source once in a server-only module and import it from any route that needs it.
+
+```ts
+// cms/articleSource.ts
+import { createCmsServerClient, defineArticleSource } from "@asteroidcms/core-utils/server";
+import type { AsteroidSeoConfig } from "@asteroidcms/core-utils";
+
+const cmsClient = createCmsServerClient({
+  cmsUrl: process.env.CMS_API_BASE_URL!,
+  apiKey: process.env.CMS_API_KEY!, // server-only, NOT NEXT_PUBLIC
+  revalidate: 300,
+});
+
+const articleSeo: AsteroidSeoConfig = {
+  siteName: "Acme",
+  baseUrl: "https://acme.example",
+  cmsUrl: process.env.CMS_API_BASE_URL!,
+  defaultDescription: "News and updates.",
+  articlePath: "/news",
+  contentLabel: "News",
+};
+
+export const articleSource = defineArticleSource({
+  client: cmsClient,
+  schemaSlug: "news",
+  listSelect: ["slug", "title", "description", "featured_image", "published_date",
+    { field: "category", single: true, select: ["slug", "name"] }],
+  detailSelect: ["slug", "title", "description", "content", "tags", "featured_image", "published_date",
+    { field: "category", single: true, select: ["slug", "name"] },
+    { field: "author", single: true, select: ["name"] }],
+  seo: articleSeo,
+  relatedLimit: 3,
+});
+```
+
+`createCmsServerClient` memoizes per request via React `cache` when available (React Server Components / React 19 / Next.js bundled React). On React 18 stable without `cache` it degrades to no per-request dedup but remains correct.
+
+`defineArticleSource` required fields: `client`, `schemaSlug`, `listSelect`, `detailSelect`, `seo`. Optional: `searchFields`, `articleType`, `status`, `relatedLimit`, `groupPostsByCategory`.
+
+### `AsteroidArticlesListingServer`
+
+Read `searchParams` in the page and pass the query as `searchQuery`.
+
+```tsx
+// app/news/page.tsx
+import { AsteroidArticlesListingServer, generateListingMetadata } from "@asteroidcms/core-utils/server";
+import { articleSource } from "@/cms/articleSource";
+
+export const generateMetadata = () => generateListingMetadata(articleSource);
+
+export default async function NewsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const { q } = await searchParams;
+  return (
+    <AsteroidArticlesListingServer
+      source={articleSource}
+      searchQuery={q}
+      renderPostCard={({ post, cmsImage }) => (
+        <a href={`/news/${post.slug}`}>
+          <h2>{post.title}</h2>
+        </a>
+      )}
+    />
+  );
+}
+```
+
+Required prop: `renderPostCard` receives `{ post, cmsImage }`. Optional: `renderFeaturedCard`, `renderEmpty`, `renderSearch`, `categorySlug`, `searchParamKey`, `searchBoxProps`, and more.
+
+### `AsteroidArticlePageServer`
+
+```tsx
+// app/news/[slug]/page.tsx
+import { AsteroidArticlePageServer, generateArticleMetadata } from "@asteroidcms/core-utils/server";
+import { articleSource } from "@/cms/articleSource";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  return generateArticleMetadata(articleSource, params);
+}
+
+export default async function ArticlePage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  return (
+    <AsteroidArticlePageServer
+      source={articleSource}
+      slug={slug}
+      renderHeader={({ post }) => <h1>{post.title}</h1>}
+      renderContent={({ post }) => (
+        <div dangerouslySetInnerHTML={{ __html: post.content ?? "" }} />
+      )}
+      renderRelatedPosts={({ relatedPosts, cmsImage }) => (
+        <ul>
+          {relatedPosts.map((related) => (
+            <li key={related.slug}>
+              <a href={`/news/${related.slug}`}>{related.title}</a>
+            </li>
+          ))}
+        </ul>
+      )}
+      renderError={({ reason }) =>
+        reason === "not-found" ? <p>Not found.</p> : <p>Error loading post.</p>
+      }
+    />
+  );
+}
+```
+
+Render-prop slots: `renderHeader`, `renderContent`, `renderRelatedPosts` (receives `{ post, relatedPosts, cmsImage }`), `renderError`. Every render prop receives an injected `cmsImage(idOrUrl)` resolver -- do not call `useCmsImage()` inside render props.
+
+### Metadata helpers
+
+```ts
+import { generateListingMetadata, generateArticleMetadata } from "@asteroidcms/core-utils/server";
+
+// Listing page -- positional args: source first
+export const generateMetadata = () => generateListingMetadata(articleSource);
+
+// Category page
+export async function generateMetadata({ params }) {
+  const { category } = await params;
+  return generateListingMetadata(articleSource, { categorySlug: category });
+}
+
+// Article page -- positional args: source first, then params or slug
+export async function generateMetadata({ params }) {
+  return generateArticleMetadata(articleSource, params);
+}
+```
+
+### Low-level fetch helpers
+
+`fetchArticles`, `fetchArticle`, `fetchRelatedArticles`, and `buildSearchConditions` are also exported for custom fetch logic outside the ready-made server components.
 
 ---
 
