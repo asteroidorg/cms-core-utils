@@ -44,7 +44,6 @@ export function ArticleSearchBox({
     }, debounceMs);
     return () => clearTimeout(timer);
     // Re-run only when the typed value or debounce changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, debounceMs, paramKey, pathname]);
 
   const onSubmit = (event: { preventDefault: () => void }) => event.preventDefault();

@@ -1,104 +1,78 @@
-# Release Workflow Setup (PR label → bump type)
+# Release Workflow Setup (manual tag → version, changelog, npm publish)
 
-This setup determines the version bump type from a **label on the PR**,
-not from commit messages — built specifically for squash-merge workflows,
-where individual commit messages on a feature branch get collapsed into
-one commit and are no longer reliably parseable.
+This workflow does **not** auto-decide the version. A human creates and
+pushes a git tag (e.g. `v1.4.0`), and that exact number becomes the
+package version — nothing here runs `npm version major/minor/patch`.
 
 ## How it works
 
-1. Create three labels in your repo: `major`, `minor`, `patch`
-2. Every PR destined for `main` gets exactly one of those labels before
-   merging
-3. On merge, `.github/workflows/release.yml`:
-   - Checks the merged PR's labels
-   - Bumps `package.json` accordingly (`npm version major|minor|patch`)
-   - Appends an entry to `CHANGELOG.md` with the PR title, number, and
-     bump type, via `.github/scripts/update-changelog.js`
-   - Commits, tags, and pushes
-   - Creates a GitHub Release
+1. You create a tag locally and push it:
+   ```bash
+   git tag v1.4.0
+   git push origin v1.4.0
+   ```
+2. `.github/workflows/release.yml` triggers on that tag push and:
+   - Reads the version straight from the tag name (`v1.4.0` → `1.4.0`)
+   - Checks out `main`, sets that version in `package.json`, generates a
+     changelog entry from commits since the previous tag, commits and
+     pushes that to `main` (does **not** move or touch the tag itself)
+   - Separately checks out the **tag** (not `main`) and publishes that
+     exact code to npm
+   - Creates a GitHub Release with auto-generated notes
 
-## Required: label setup
+## Why two checkouts in one job
 
-Create these labels (Settings → Labels, or `gh label create`):
+The tag is the source of truth for what gets published — not whatever
+has landed on `main` by the time the workflow runs. So the workflow:
 
-```bash
-gh label create major --color FF0000 --description "Breaking change"
-gh label create minor --color 00CC00 --description "New feature, backwards compatible"
-gh label create patch --color 0066FF --description "Bug fix or small change"
-```
+- Checks out `main` once, to commit the version bump + changelog there
+  (so your repo's history reflects the release)
+- Checks out the **tag** separately, to actually run `npm publish` —
+  guaranteeing the published package matches exactly what was tagged,
+  with only the version field corrected
 
-## Important: PRs without a bump label are silently skipped
+This also means the workflow never force-moves or rewrites the tag —
+the tag stays exactly where you created it, forever.
 
-The workflow's `if:` condition checks for the presence of `major`,
-`minor`, or `patch` on the merged PR. **If none of those three labels is
-present, the workflow does not run at all** — no version bump, no
-changelog entry, nothing. This is intentional (not every PR should
-trigger a release — e.g. a docs-only or CI-only PR), but it means a
-forgotten label on a real feature PR will silently produce no release.
+## Required setup
 
-Consider adding required-label branch protection (e.g. via a separate
-lightweight "PR labeled" check) if you want merges blocked until a bump
-label is applied. This setup doesn't include that check by default.
+**`NPM_TOKEN` secret** — generate an npm Automation token, add it as a
+repo secret (Settings → Secrets and variables → Actions). Used by the
+publish step.
 
-## Why this isn't `semantic-release` or `release-please`
+**Branch protection** — if `main` requires PR reviews, the workflow's
+push of the version-bump commit will fail unless `github-actions[bot]`
+is allowed to bypass that rule for this specific automated commit.
 
-Both of those tools are built around parsing **commit messages**
-(`feat:`, `fix:`, `BREAKING CHANGE:`) to decide bump type — which doesn't
-work reliably once PRs are squash-merged into a single commit, unless
-that squash commit message itself is conventional-format (which a raw PR
-title usually isn't). Since you're using PR labels as the source of
-truth instead, this is a small custom workflow + script rather than a
-drop-in tool. The trade-off: less battle-tested, but exactly matches your
-process with no commit-message conventions required from contributors.
+## Tagging conventions that matter
 
-## Branch protection note
+- Tags must start with `v` (e.g. `v1.4.0`) to match the workflow's
+  trigger filter (`tags: ["v*"]`) and the version-extraction logic.
+- Tag whatever commit on `main` you want released — typically the
+  latest one, but not required to be.
+- `npm publish --access public` is included for first-time scoped
+  package publishes (e.g. `@asteroidcms/...`); harmless no-op for
+  unscoped packages.
 
-If `main` requires PR reviews, the workflow's direct
-`git push origin main` will fail unless `github-actions[bot]` (the
-`GITHUB_TOKEN` identity) is allowed to bypass that specific protection
-rule.
+## Re-running a release
 
-## Publishing to npm (included)
+If a run fails partway (e.g. npm publish fails due to an expired
+token), re-pushing the same tag won't re-trigger the workflow — git
+doesn't let you push an existing tag again without `--force`, and
+force-pushing a tag is exactly what this setup avoids. Instead:
 
-`release.yml` publishes to npm automatically as the last step, after the
-GitHub Release is created. To enable it:
+- Re-run the failed job from the Actions tab (Actions → the run →
+  "Re-run failed jobs"), or
+- Fix the issue and manually run the remaining steps locally (e.g.
+  `npm publish` directly) for that version.
 
-1. Generate an npm **Automation** token (npmjs.com → your avatar →
-   Access Tokens → Generate New Token → Automation type — this type
-   bypasses 2FA prompts, which is required for CI). For an org-scoped
-   package, the token must belong to an account with publish rights on
-   that org/package.
-2. Add it as a repo secret named `NPM_TOKEN`
-   (Settings → Secrets and variables → Actions → New repository secret).
-3. That's it — `setup-node`'s `registry-url` input plus
-   `NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}` on the publish step handle
-   authentication.
+The version-bump and changelog steps are written to be safe to re-run
+(`--allow-same-version`, and the commit/push steps won't fail the job
+if there's nothing new to commit).
 
-### `--access public`
+## What gets published
 
-The publish step runs `npm publish --access public`. This is required
-the **first time** a scoped package (e.g. `@asteroidcms/your-package`) is
-published — npm defaults scoped packages to private otherwise, which
-fails on a free/team plan without a paid private-package add-on. For an
-unscoped package this flag has no effect and is safe to leave in.
-
-### If publish fails after the tag is already pushed
-
-Because publish is the last step, a publish failure (bad token, network
-blip, version already exists on the registry) does **not** roll back the
-git tag, commit, or GitHub Release — those have already succeeded. To
-recover, fix the underlying issue (e.g. rotate `NPM_TOKEN`) and either:
-
-- Manually run `npm publish` locally for that version, or
-- Re-run just the failed job from the Actions tab (Actions → the run →
-  "Re-run failed jobs") — this re-runs the whole job including the
-  version bump step, so only do this if `npm version` is idempotent for
-  your case, or temporarily comment out the earlier steps if not.
-
-### What gets published
-
-By default, `npm publish` includes everything not excluded by
-`.npmignore` or your package.json's `files` field. Double-check that
-field exists and is correct before relying on this — otherwise you may
-accidentally publish source files, tests, or `.github/` itself.
+`npm publish` includes everything not excluded by `.npmignore` or your
+package.json's `files` field. Confirm that's set correctly before
+relying on this — otherwise the published package may include files you
+didn't intend to ship.

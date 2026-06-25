@@ -1,34 +1,49 @@
 #!/usr/bin/env node
-// Prepends a new release entry to CHANGELOG.md.
+// Prepends a new release entry to CHANGELOG.md, built from git commit
+// messages in a given range.
 //
 // Usage:
-//   node update-changelog.js <version> <prNumber> <prTitle> <bumpType>
+//   node update-changelog.js <tag> <gitRange>
 //
-// Run as part of the release workflow, once per merged PR carrying a
-// major/minor/patch label. Kept as a real script (rather than inline
-// shell) because PR titles can contain quotes, backticks, or other
-// characters that are unsafe to interpolate directly into a shell
-// command.
+// <gitRange> is anything `git log` accepts, e.g. "v1.3.0..v1.4.0" or just
+// "v1.4.0" when there's no previous tag to diff against.
+//
+// Run as part of the tag-triggered release workflow. Kept as a real
+// script (rather than inline shell) so commit message content is never
+// interpolated unsafely into a shell command.
 
-const fs = require("fs");
-const path = require("path");
+import { execSync } from "child_process";
+import fs from "fs";
+import path from "path";
 
-const [, , version, prNumber, prTitle, bumpType] = process.argv;
+const [, , tag, gitRange] = process.argv;
 
-if (!version || !prNumber || !prTitle || !bumpType) {
-  console.error(
-    "Usage: update-changelog.js <version> <prNumber> <prTitle> <bumpType>",
-  );
+if (!tag || !gitRange) {
+  console.error("Usage: update-changelog.js <tag> <gitRange>");
   process.exit(1);
 }
+
+// Pull commit subjects + short hash for the range, oldest-last (default
+// git log order is newest-first, which is what we want for display).
+// --invert-grep + --grep excludes this workflow's own past release
+// commits so they don't clutter the changelog.
+let log;
+try {
+  log = execSync(
+    `git log ${gitRange} --pretty=format:"- %s (%h)" --invert-grep --grep="^chore(release):"`,
+    { encoding: "utf8" },
+  ).trim();
+} catch (err) {
+  console.error(`git log failed for range "${gitRange}":`, err.message);
+  process.exit(1);
+}
+
+const body = log.length > 0 ? log : "- No notable changes.";
 
 const changelogPath = path.join(process.cwd(), "CHANGELOG.md");
 const date = new Date().toISOString().slice(0, 10);
 
-const bumpLabel =
-  { major: "Major", minor: "Minor", patch: "Patch" }[bumpType] || bumpType;
-
-const entry = `## ${version} (${date})\n\n- **${bumpLabel}**: ${prTitle} (#${prNumber})\n\n`;
+const entry = `## ${tag} (${date})\n\n${body}\n\n`;
 
 let existing = "";
 if (fs.existsSync(changelogPath)) {
@@ -42,12 +57,12 @@ if (fs.existsSync(changelogPath)) {
 const headingMatch = existing.match(/^# .+\n+/);
 let updated;
 if (headingMatch) {
-  const heading = headingMatch[0];
-  const rest = existing.slice(heading.length);
+  const heading = headingMatch[0].replace(/\n+$/, "\n\n");
+  const rest = existing.slice(headingMatch[0].length);
   updated = heading + entry + rest;
 } else {
   updated = entry + existing;
 }
 
 fs.writeFileSync(changelogPath, updated);
-console.log(`Added ${version} entry to CHANGELOG.md`);
+console.log(`Added ${tag} entry to CHANGELOG.md`);
