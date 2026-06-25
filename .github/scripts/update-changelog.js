@@ -43,7 +43,8 @@ const body = log.length > 0 ? log : "- No notable changes.";
 const changelogPath = path.join(process.cwd(), "CHANGELOG.md");
 const date = new Date().toISOString().slice(0, 10);
 
-const entry = `## ${tag} (${date})\n\n${body}\n\n`;
+const versionOnly = tag.replace(/^v/, "");
+const entry = `## [${versionOnly}] - ${date}\n\n### Added\n\n${body}\n`;
 
 let existing = "";
 if (fs.existsSync(changelogPath)) {
@@ -52,16 +53,32 @@ if (fs.existsSync(changelogPath)) {
   existing = "# Changelog\n\n";
 }
 
-// Insert the new entry right after the top-level heading, so the file
-// stays newest-first under a single "# Changelog" title.
-const headingMatch = existing.match(/^# .+\n+/);
+// Insert the new entry immediately after the "Unreleased" section.
+const unreleasedMatch = existing.match(/^## \[Unreleased\]\s*$/m);
 let updated;
-if (headingMatch) {
-  const heading = headingMatch[0].replace(/\n+$/, "\n\n");
-  const rest = existing.slice(headingMatch[0].length);
-  updated = heading + entry + rest;
+
+if (unreleasedMatch) {
+  const insertPos = unreleasedMatch.index + unreleasedMatch[0].length;
+  updated =
+    existing.slice(0, insertPos) + `\n\n${entry}` + existing.slice(insertPos);
 } else {
   updated = entry + existing;
+}
+
+// Add version reference link before existing reference links.
+const compareMatch = gitRange.match(/^(.+)\.\.(.+)$/);
+
+const compareLink = compareMatch
+  ? `[${versionOnly}]: https://github.com/asteroidorg/cms-core-utils/compare/${compareMatch[1]}...${compareMatch[2]}`
+  : `[${versionOnly}]: https://github.com/asteroidorg/cms-core-utils/releases/tag/${tag}`;
+
+const refsStart = updated.search(/^\[\d+\.\d+\.\d+\]: /m);
+
+if (refsStart >= 0) {
+  updated =
+    updated.slice(0, refsStart) + `${compareLink}\n` + updated.slice(refsStart);
+} else {
+  updated = `${updated.trimEnd()}\n\n${compareLink}\n`;
 }
 
 fs.writeFileSync(changelogPath, updated);
