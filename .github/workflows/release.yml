@@ -43,6 +43,18 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      - name: Verify tag commit exists on main
+        run: |
+          git fetch origin main
+
+          TAG_COMMIT=$(git rev-parse "${{ steps.version.outputs.tag }}")
+          MAIN_HEAD=$(git rev-parse origin/main)
+
+          if ! git merge-base --is-ancestor "$TAG_COMMIT" "$MAIN_HEAD"; then
+            echo "Tag commit is not contained in main."
+            exit 1
+          fi
+
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
