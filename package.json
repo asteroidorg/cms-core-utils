@@ -1,6 +1,6 @@
 {
   "name": "@asteroidcms/core-utils",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Seamless integration utilities for Asteroid CMS — Apollo provider, content hooks, and rich-text rendering.",
   "keywords": [
     "asteroidcms",
