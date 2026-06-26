@@ -1,7 +1,9 @@
 <div align="center">
   <h1>
     <div style="display: inline-flex; align-items: center; gap: 4px;">
-      <img src="https://cms.theasteroid.tech/logo/logo.svg" alt="@asteroidcms" height="25px" />
+      <a href="https://www.npmjs.com/package/@asteroidcms/core-utils">
+        <img src="https://cms.theasteroid.tech/logo/logo.svg" alt="@asteroidcms" height="25px" />
+      </a>
       <span>/core-utils</span>
     </div>
   </h1>
