@@ -95,7 +95,7 @@ jobs:
           # Nothing to commit if package.json already had this version
           # (e.g. workflow re-run) — don't fail the job in that case.
           git commit -m "chore(release): ${{ steps.version.outputs.tag }} [skip ci]" || echo "Nothing to commit, continuing."
-          git push origin main || echo "Nothing to push, continuing."
+          git push origin main
 
       # --- Part 2: publish exactly what the tag points to ---
       # Separate checkout of the tag itself (detached HEAD), with the
