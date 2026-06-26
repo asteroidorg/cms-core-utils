@@ -1,0 +1,141 @@
+name: Release
+
+# Triggered manually by creating and pushing a tag, e.g.:
+#   git tag v1.4.0
+#   git push origin v1.4.0
+#
+# The version is taken EXACTLY from the tag name (minus a leading "v" if
+# present) — this workflow never runs `npm version major/minor/patch`.
+# The human decides the version by choosing the tag; this workflow just
+# applies that decision to package.json, the changelog, and npm.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # --- Part 1: bump package.json + changelog, commit to main ---
+      # This does NOT touch or move the tag. The tag was already created
+      # by the human and stays exactly where it is. We separately check
+      # out main, apply the version there, and push a normal commit.
+
+      - name: Checkout main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verify tag commit exists on main
+        run: |
+          git fetch origin main
+
+          TAG_COMMIT=$(git rev-parse "${{ steps.version.outputs.tag }}")
+          MAIN_HEAD=$(git rev-parse origin/main)
+
+          if ! git merge-base --is-ancestor "$TAG_COMMIT" "$MAIN_HEAD"; then
+            echo "Tag commit is not contained in main."
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Set version in package.json
+        run: |
+          npm version "${{ steps.version.outputs.version }}" \
+            --no-git-tag-version --allow-same-version
+
+      - name: Find previous tag
+        id: prev_tag
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 "${{ steps.version.outputs.tag }}^" 2>/dev/null || echo "")
+          echo "prev_tag=$PREV_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Update changelog
+        run: |
+          if [ -n "${{ steps.prev_tag.outputs.prev_tag }}" ]; then
+            RANGE="${{ steps.prev_tag.outputs.prev_tag }}..${{ steps.version.outputs.tag }}"
+          else
+            RANGE="${{ steps.version.outputs.tag }}"
+          fi
+          node .github/scripts/update-changelog.js \
+            "${{ steps.version.outputs.tag }}" \
+            "$RANGE"
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit and push to main
+        run: |
+          git add package.json package-lock.json CHANGELOG.md
+          # Nothing to commit if package.json already had this version
+          # (e.g. workflow re-run) — don't fail the job in that case.
+          git commit -m "chore(release): ${{ steps.version.outputs.tag }} [skip ci]" || echo "Nothing to commit, continuing."
+          git push origin main
+
+      # --- Part 2: publish exactly what the tag points to ---
+      # Separate checkout of the tag itself (detached HEAD), with the
+      # corrected version field applied on top, so what's published
+      # matches the tagged commit + the right version number — not
+      # whatever has landed on main since.
+
+      - name: Checkout tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.version.outputs.tag }}
+
+      - name: Set version for publish
+        run: |
+          npm version "${{ steps.version.outputs.version }}" \
+            --no-git-tag-version --allow-same-version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Run Tests
+        run: npm run test
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          previous_tag: ${{ steps.prev_tag.outputs.prev_tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
