@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `ArticleSearchBox` from `@asteroidcms/core-utils/client` is now
+  framework-agnostic: it drives the URL `?q=` param via the native History API
+  (with a `popstate` dispatch) instead of `next/navigation`, so it works in any
+  React app (Vite, CRA, React Router) without pulling in `next`. Added an
+  optional `onQueryChange(query)` callback for router-less apps.
+
+### Added
+
+- `@asteroidcms/core-utils/next` now exports a Next.js-bound `ArticleSearchBox`
+  that commits via `router.replace` (App Router refetch). The server listing
+  (`AsteroidArticlesListingServer`) uses this variant, so URL-driven search in
+  Next.js behaves exactly as before. Next.js consumers that rely on Server
+  Component refetch should import `ArticleSearchBox` from
+  `@asteroidcms/core-utils/next` rather than `/client`.
+
 
 
 ## [0.2.2] - 2026-06-26

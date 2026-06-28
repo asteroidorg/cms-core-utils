@@ -17,7 +17,8 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@asteroidcms/core-utils/client": ["./src/client.ts"]
+      "@asteroidcms/core-utils/client": ["./src/client.ts"],
+      "@asteroidcms/core-utils/next-client": ["./src/next-client.ts"]
     }
   },
   "include": ["src/**/*"],

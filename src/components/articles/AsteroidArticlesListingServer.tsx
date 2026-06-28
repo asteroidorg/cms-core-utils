@@ -1,6 +1,6 @@
 // src/components/articles/AsteroidArticlesListingServer.tsx
 import { type ReactNode } from "react";
-import { ArticleSearchBox, type ArticleSearchBoxProps } from "@asteroidcms/core-utils/client";
+import { ArticleSearchBox, type ArticleSearchBoxProps } from "@asteroidcms/core-utils/next-client";
 import { buildCollectionJsonLd } from "../../seo/jsonld";
 import { createImageResolver } from "../../utils/cmsImage";
 import { fetchArticles, type ArticleSource } from "../../server/defineArticleSource";

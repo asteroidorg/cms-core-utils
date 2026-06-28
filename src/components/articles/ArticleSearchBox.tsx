@@ -1,64 +1,69 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+// Framework-agnostic search box. Drives the URL query param via the native
+// History API — no router dependency — so it works in any React app (Vite, CRA,
+// React Router, etc.). Next.js apps that need a Server Component refetch should
+// import ArticleSearchBox from `@asteroidcms/core-utils/next` instead.
 
-export interface ArticleSearchBoxProps {
-  /** URL query param the search writes to. Default: "q". */
-  paramKey?: string;
-  placeholder?: string;
-  /** Debounce before navigating. Default: 500ms. */
-  debounceMs?: number;
-  className?: string;
-  /** Override the default input UI. */
-  render?: (params: {
-    value: string;
-    onChange: (value: string) => void;
-    onSubmit: (event: { preventDefault: () => void }) => void;
-  }) => ReactNode;
-}
+import { useEffect, type ReactNode } from "react";
+import { buildSearchUrl, readSearchParam } from "./articleSearch.helpers";
+import {
+  ArticleSearchBoxView,
+  useArticleSearchValue,
+  type ArticleSearchBoxProps,
+} from "./articleSearch.shared";
+
+export type { ArticleSearchBoxProps };
 
 export function ArticleSearchBox({
   paramKey = "q",
   placeholder = "Search articles...",
   debounceMs = 500,
   className,
+  onQueryChange,
   render,
-}: ArticleSearchBoxProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const initial = searchParams.get(paramKey) ?? "";
-  const [value, setValue] = useState(initial);
-  const searchParamsRef = useRef(searchParams);
-  searchParamsRef.current = searchParams;
+}: ArticleSearchBoxProps): ReactNode {
+  const commit = (value: string) => {
+    if (typeof window !== "undefined") {
+      const url = buildSearchUrl(
+        window.location.search,
+        window.location.pathname,
+        paramKey,
+        value,
+      );
+      const current = `${window.location.pathname}${window.location.search}`;
+      if (url !== current) {
+        window.history.replaceState(window.history.state, "", url);
+        // replaceState doesn't emit popstate; dispatch it so router-aware apps
+        // (React Router, Next's client hooks) pick up the new query.
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      }
+    }
+    onQueryChange?.(value.trim());
+  };
 
+  const [value, setValue] = useArticleSearchValue({
+    debounceMs,
+    initialValue: "",
+    commit,
+  });
+
+  // Seed from the URL after mount. Starting empty keeps server-rendered markup
+  // deterministic (no hydration mismatch); the effect fills in any existing
+  // `?q=` once on the client.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const params = new URLSearchParams(Array.from(searchParamsRef.current.entries()));
-      const trimmed = value.trim();
-      if (trimmed) params.set(paramKey, trimmed);
-      else params.delete(paramKey);
-      const query = params.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-    }, debounceMs);
-    return () => clearTimeout(timer);
-    // Re-run only when the typed value or debounce changes.
-  }, [value, debounceMs, paramKey, pathname]);
-
-  const onSubmit = (event: { preventDefault: () => void }) => event.preventDefault();
-
-  if (render) return <>{render({ value, onChange: setValue, onSubmit })}</>;
+    if (typeof window === "undefined") return;
+    const fromUrl = readSearchParam(window.location.search, paramKey);
+    if (fromUrl) setValue(fromUrl);
+  }, [paramKey, setValue]);
 
   return (
-    <form onSubmit={onSubmit} className={className}>
-      <input
-        type="search"
-        value={value}
-        placeholder={placeholder}
-        aria-label={placeholder}
-        onChange={(event) => setValue(event.target.value)}
-      />
-    </form>
+    <ArticleSearchBoxView
+      value={value}
+      setValue={setValue}
+      placeholder={placeholder}
+      className={className}
+      render={render}
+    />
   );
 }

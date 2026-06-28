@@ -39,6 +39,11 @@
       "import": "./dist/next.js",
       "require": "./dist/next.cjs"
     },
+    "./next-client": {
+      "types": "./dist/next-client.d.ts",
+      "import": "./dist/next-client.js",
+      "require": "./dist/next-client.cjs"
+    },
     "./server": {
       "types": "./dist/server.d.ts",
       "import": "./dist/server.js",
