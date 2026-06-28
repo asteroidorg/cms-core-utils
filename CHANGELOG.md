@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [0.2.3] - 2026-06-28
+
+### Added
+
+- Merge pull request #5 from asteroidorg/feat/nexy-react-sperate-implementation (2c48a27)
+- feat: seperate imports for next and react (fb6a2e3)
+- docs: spec for ArticleSearchBox plain-React compatibility (3494328)
+- Update CHANGELOG with recent additions and fixes (5e51cc8)
+
 ### Changed
 
 - `ArticleSearchBox` from `@asteroidcms/core-utils/client` is now
@@ -123,6 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `RichTextContent` component for rendering rich-text blocks
 - `getContentReadTime` utility for estimating read time
 
+[0.2.3]: https://github.com/asteroidorg/cms-core-utils/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/asteroidorg/cms-core-utils/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/asteroidorg/cms-core-utils/releases/tag/v0.2.1
 [0.2.0]: https://github.com/asteroidorg/cms-core-utils/compare/v0.1.8...v0.2.0
